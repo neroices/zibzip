@@ -1,0 +1,29 @@
+[package]
+name = "zibzip"
+version = "0.1.3"
+edition = "2024"
+
+[lib]
+name = "zibzip"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+jni = { version = "0.22", default-features = false }
+rayon = "1.10"
+walkdir = "2.5"
+zip = { version = "2.2", default-features = false, features = ["deflate-zlib-ng", "bzip2", "time", "aes-crypto"] }
+flate2 = { version = "1.0", default-features = false, features = ["zlib-ng"] }
+sevenz_rust = { package = "sevenz-rust2", version = "0.24", default-features = false, features = ["aes256", "bzip2", "compress", "ppmd", "util"] }
+tar = "0.4"
+zstd = "0.14"
+bzip2 = "0.6"
+lzma-rust2 = { version = "0.23", default-features = false, features = ["std", "xz", "encoder"] }
+chrono = "0.4"
+rars = "0.11"
+
+[profile.release]
+opt-level = 3
+lto = false
+codegen-units = 1
+panic = "abort"
+strip = true

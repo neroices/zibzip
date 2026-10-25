@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- A file manager must be able to hand any readable file to other apps. -->
+    <root-path name="root" path="" />
+</paths>

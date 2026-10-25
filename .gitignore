@@ -1,0 +1,59 @@
+# Built application files
+*.apk
+*.aar
+*.ap_
+*.aab
+
+# Files for the ART/JVM
+*.dex
+*.class
+
+# Java / Kotlin caches
+.kotlin/
+*.kotlinc
+
+# Gradle files
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+
+# Rust / Cargo build artifacts
+target/
+Cargo.lock.bak
+*.so
+app/src/main/jniLibs/
+
+# Android Studio, IntelliJ IDEA & VS Code
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+out/
+.navigation/
+
+# Captures and profiling
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Local configuration, secrets & keystores
+local.properties
+keystore.properties
+signing.properties
+.env*
+*.jks
+*.keystore
+*.p12
+*.bks
+*.pepk
+
+# Operating System & Editor temporary files
+.DS_Store
+Thumbs.db
+ehthumbs.db
+*.swp
+*~
+*.orig
+*.rej
+
