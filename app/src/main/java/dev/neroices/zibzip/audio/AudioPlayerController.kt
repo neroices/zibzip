@@ -359,7 +359,7 @@ class AudioPlayerController(private val context: Context) {
     private fun updateState(isPlaying: Boolean) {
         val player = mediaPlayer ?: return
         if (currentIndex in queue.indices) {
-            val track = queue[currentIndex]
+            val track = _state.value?.track?.takeIf { it.path == queue[currentIndex].path } ?: queue[currentIndex]
             val duration = try { player.duration } catch (_: Exception) { 0 }
             val pos = try { player.currentPosition } catch (_: Exception) { 0 }
             _state.value = AudioPlaybackState(
