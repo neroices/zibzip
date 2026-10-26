@@ -195,5 +195,51 @@ fn test_add_zip_entries_preserves_hierarchy() {
         paths
     );
 
+    // Test removing entries
+    let removed = remove_zip_entries(
+        &zip_path,
+        &["folder/sub/child.txt".to_string()],
+        std::ptr::null(),
+        |_, _, _| Ok(()),
+    )
+    .unwrap();
+    assert_eq!(removed, 1);
+
+    let entries_after_remove = list_entries(&zip_path, None).unwrap();
+    assert!(!entries_after_remove.iter().any(|e| e.path == "folder/sub/child.txt"));
+    assert!(entries_after_remove.iter().any(|e| e.path == "init.txt"));
+
+    let _ = fs::remove_dir_all(&temp_dir);
+}
+
+#[test]
+fn test_tar_preserves_mtime() {
+    let temp_dir = std::env::temp_dir().join(format!(
+        "zibzip_test_tar_mtime_{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    fs::create_dir_all(&temp_dir).unwrap();
+    let test_file = temp_dir.join("test.txt");
+    fs::write(&test_file, b"content").unwrap();
+    let tar_path = temp_dir.join("test.tar");
+
+    create_archive(
+        &[test_file],
+        &tar_path,
+        "TAR",
+        0,
+        None,
+        std::ptr::null(),
+        |_, _, _| Ok(()),
+    )
+    .unwrap();
+
+    let entries = list_entries(&tar_path, None).unwrap();
+    assert_eq!(entries.len(), 1);
+    assert!(entries[0].last_modified > 0, "Tar entry must have non-zero last_modified");
+
     let _ = fs::remove_dir_all(&temp_dir);
 }

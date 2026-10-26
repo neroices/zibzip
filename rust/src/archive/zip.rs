@@ -255,7 +255,6 @@ pub fn remove_zip_entries(
 
     let total = zip_in.len();
     let mut removed_count = 0i32;
-    let mut buf = vec![0u8; BUFFER_SIZE];
 
     for i in 0..total {
         if !cancel_token.is_null() && unsafe { (*cancel_token).load(AtomicOrdering::Relaxed) } {
@@ -263,7 +262,7 @@ pub fn remove_zip_entries(
             return Err("Operation cancelled".into());
         }
 
-        let mut entry = zip_in.by_index(i)?;
+        let entry = zip_in.by_index_raw(i)?;
         let name = normalize_entry_path(entry.name());
 
         let remove = paths_to_remove
@@ -276,27 +275,11 @@ pub fn remove_zip_entries(
             continue;
         }
 
-        let options = SimpleFileOptions::default()
-            .compression_method(entry.compression())
-            .last_modified_time(entry.last_modified().unwrap_or_default());
-
-        if entry.is_dir() {
-            zip_out.add_directory(entry.name(), options)?;
-        } else {
-            zip_out.start_file(entry.name(), options)?;
-            loop {
-                let n = entry.read(&mut buf)?;
-                if n == 0 {
-                    break;
-                }
-                zip_out.write_all(&buf[..n])?;
-            }
-        }
+        zip_out.raw_copy_file(entry)?;
         let _ = on_progress(i as i64 + 1, total as i64, &name);
     }
 
     zip_out.finish()?;
-    fs::remove_file(archive_path)?;
     fs::rename(&part_path, archive_path)?;
     Ok(removed_count)
 }
@@ -317,26 +300,40 @@ pub fn add_zip_entries(
     let mut zip_out = ZipWriter::new(BufWriter::with_capacity(BUFFER_SIZE, out_file));
 
     let mut buf = vec![0u8; BUFFER_SIZE];
+    let inner_clean = inner_dir.trim_matches('/');
 
-    // First copy existing entries
-    for i in 0..zip_in.len() {
-        let mut entry = zip_in.by_index(i)?;
-        let options = SimpleFileOptions::default()
-            .compression_method(entry.compression())
-            .last_modified_time(entry.last_modified().unwrap_or_default());
-
-        if entry.is_dir() {
-            zip_out.add_directory(entry.name(), options)?;
-        } else {
-            zip_out.start_file(entry.name(), options)?;
-            loop {
-                let n = entry.read(&mut buf)?;
-                if n == 0 {
-                    break;
-                }
-                zip_out.write_all(&buf[..n])?;
-            }
+    // Collect paths to be added so we don't write duplicate entries
+    let mut new_entry_paths = std::collections::HashSet::new();
+    for src in source_paths {
+        let root_parent = src.parent().unwrap_or(src);
+        for entry in WalkDir::new(src).into_iter().flatten() {
+            let rel_from_root = entry
+                .path()
+                .strip_prefix(root_parent)
+                .unwrap_or(entry.path());
+            let rel_str = rel_from_root.to_string_lossy().replace('\\', "/");
+            let rel = if inner_clean.is_empty() {
+                rel_str
+            } else {
+                format!("{}/{}", inner_clean, rel_str.trim_start_matches('/'))
+            };
+            new_entry_paths.insert(normalize_entry_path(&rel));
         }
+    }
+
+    // First copy existing entries with raw copying (preserves encryption/compression)
+    for i in 0..zip_in.len() {
+        if !cancel_token.is_null() && unsafe { (*cancel_token).load(AtomicOrdering::Relaxed) } {
+            let _ = fs::remove_file(&part_path);
+            return Err("Operation cancelled".into());
+        }
+
+        let entry = zip_in.by_index_raw(i)?;
+        let name = normalize_entry_path(entry.name());
+        if new_entry_paths.contains(&name) {
+            continue;
+        }
+        zip_out.raw_copy_file(entry)?;
     }
 
     // Now append new sources
@@ -359,7 +356,6 @@ pub fn add_zip_entries(
         }
 
     let mut added_count = 0i32;
-    let inner_clean = inner_dir.trim_matches('/');
 
     for src in source_paths {
         let root_parent = src.parent().unwrap_or(src);
@@ -402,7 +398,6 @@ pub fn add_zip_entries(
     }
 
     zip_out.finish()?;
-    fs::remove_file(archive_path)?;
     fs::rename(&part_path, archive_path)?;
     Ok(added_count)
 }

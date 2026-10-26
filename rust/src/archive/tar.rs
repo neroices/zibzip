@@ -213,6 +213,13 @@ pub(crate) fn create_tar(
                     let mut header = tar::Header::new_gnu();
                     header.set_size(meta.len());
                     header.set_mode(0o644);
+                    let mtime = meta
+                        .modified()
+                        .ok()
+                        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                        .map(|d| d.as_secs())
+                        .unwrap_or(0);
+                    header.set_mtime(mtime);
                     header.set_cksum();
 
                     let mut reader =
@@ -327,6 +334,13 @@ fn write_tar_entries<W: Write>(
                 let mut header = tar::Header::new_gnu();
                 header.set_size(meta.len());
                 header.set_mode(0o644);
+                let mtime = meta
+                    .modified()
+                    .ok()
+                    .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                    .map(|d| d.as_secs())
+                    .unwrap_or(0);
+                header.set_mtime(mtime);
                 header.set_cksum();
 
                 let mut reader = BufReader::with_capacity(BUFFER_SIZE, File::open(entry.path())?);

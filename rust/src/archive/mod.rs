@@ -298,18 +298,13 @@ pub fn create_archive(
         Ok(bytes) => {
             if !cancel_token.is_null() && unsafe { (*cancel_token).load(AtomicOrdering::Relaxed) } {
                 let _ = fs::remove_file(&part_path);
-                let _ = fs::remove_file(output_path);
                 return Err("Operation cancelled".into());
-            }
-            if output_path.exists() {
-                let _ = fs::remove_file(output_path);
             }
             fs::rename(&part_path, output_path)?;
             Ok(bytes)
         }
         Err(e) => {
             let _ = fs::remove_file(&part_path);
-            let _ = fs::remove_file(output_path);
             Err(e)
         }
     }
