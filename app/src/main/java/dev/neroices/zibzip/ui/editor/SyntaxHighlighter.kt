@@ -299,6 +299,23 @@ fun highlightSyntax(
     return builder.toAnnotatedString()
 }
 
+private val searchPatternCache = java.util.Collections.synchronizedMap(
+    object : java.util.LinkedHashMap<Pair<String, Boolean>, Pattern>(16, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Pair<String, Boolean>, Pattern>?): Boolean {
+            return size > 16
+        }
+    }
+)
+
+private fun getSearchPattern(query: String, caseSensitive: Boolean): Pattern? {
+    val key = Pair(query, caseSensitive)
+    searchPatternCache[key]?.let { return it }
+    val flags = if (caseSensitive) 0 else Pattern.CASE_INSENSITIVE or Pattern.UNICODE_CASE
+    val pattern = runCatching { Pattern.compile(Pattern.quote(query), flags) }.getOrNull() ?: return null
+    searchPatternCache[key] = pattern
+    return pattern
+}
+
 private fun applySearchHighlights(
     builder: AnnotatedString.Builder,
     text: String,
@@ -309,8 +326,7 @@ private fun applySearchHighlights(
 ) {
     if (query.isEmpty()) return
 
-    val flags = if (caseSensitive) 0 else Pattern.CASE_INSENSITIVE or Pattern.UNICODE_CASE
-    val pattern = runCatching { Pattern.compile(Pattern.quote(query), flags) }.getOrNull() ?: return
+    val pattern = getSearchPattern(query, caseSensitive) ?: return
     val matcher = pattern.matcher(text)
     var matchIndex = 0
 

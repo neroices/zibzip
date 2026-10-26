@@ -311,7 +311,7 @@ fun TextEditorScreen(
         scope.launch(Dispatchers.IO) {
             try {
                 val parentDir = file.parentFile ?: file.absoluteFile.parentFile ?: File(".")
-                val tempFile = File.createTempFile(".${file.name}", ".tmp", parentDir)
+                val tempFile = File.createTempFile(".${file.name}".padEnd(3, '_'), ".tmp", parentDir)
                 try {
                     tempFile.writeText(textToSave, Charsets.UTF_8)
                     if (!tempFile.renameTo(file)) {
