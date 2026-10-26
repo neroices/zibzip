@@ -217,9 +217,12 @@ fun TrashBottomSheet(
     }
 
     if (showEmptyConfirm) {
+        val totalBytes = trashItems.sumOf { it.size }
+        val sizeLabel = if (totalBytes > 0) " (${formatSize(totalBytes)})" else ""
         ConfirmDialog(
             title = "Empty Trash?",
-            message = "All ${trashItems.size} items in Trash will be permanently deleted.\n\nThis cannot be undone.",
+            message = "All ${trashItems.size} items$sizeLabel in Trash will be permanently deleted." +
+                "\n\nThis cannot be undone.",
             confirmLabel = "Empty",
             onDismiss = { showEmptyConfirm = false },
             onConfirm = {
@@ -231,9 +234,10 @@ fun TrashBottomSheet(
     }
 
     itemToDeletePermanently?.let { item ->
+        val sizeLabel = if (item.size > 0) " (${formatSize(item.size)})" else ""
         ConfirmDialog(
             title = "Delete permanently?",
-            message = "\"${item.originalName}\" will be permanently deleted.\n\nThis cannot be undone.",
+            message = "\"${item.originalName}\"$sizeLabel will be permanently deleted.\n\nThis cannot be undone.",
             confirmLabel = "Delete",
             onDismiss = { itemToDeletePermanently = null },
             onConfirm = {

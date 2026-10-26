@@ -55,6 +55,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -73,6 +74,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.neroices.zibzip.R
+import dev.neroices.zibzip.domain.formatSize
 import dev.neroices.zibzip.data.AppSettings
 import dev.neroices.zibzip.data.ThemeMode
 import dev.neroices.zibzip.domain.SortField
@@ -409,6 +411,11 @@ private fun MainSettingsPage(
             if (settings.useTrash) {
                 CardDivider()
                 var showEmptyConfirm by remember { mutableStateOf(false) }
+                var trashStats by remember { mutableStateOf<dev.neroices.zibzip.data.TrashStats?>(null) }
+                LaunchedEffect(settings.useTrash) {
+                    trashStats = context.zibzipApp.trash.getTrashStats()
+                }
+
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -428,12 +435,25 @@ private fun MainSettingsPage(
                             .padding(horizontal = 14.dp),
                     ) {
                         Text(
-                            text = "Empty trash",
+                            text = if (trashStats != null && trashStats!!.totalBytes > 0) {
+                                "Empty trash (${formatSize(trashStats!!.totalBytes)})"
+                            } else {
+                                "Empty trash"
+                            },
                             style = MaterialTheme.typography.bodyLarge,
                             color = cs.onSurface,
                         )
                         Text(
-                            text = "Permanently remove all trashed items",
+                            text = when {
+                                trashStats == null -> "Permanently remove all trashed items"
+                                trashStats!!.count == 0 -> "Trash is empty"
+                                else -> {
+                                    val count = trashStats!!.count
+                                    val unit = if (count == 1) "item" else "items"
+                                    val bytes = formatSize(trashStats!!.totalBytes)
+                                    "$count $unit · $bytes in trash"
+                                }
+                            },
                             style = MaterialTheme.typography.bodySmall,
                             color = cs.onSurfaceVariant,
                         )
@@ -441,9 +461,10 @@ private fun MainSettingsPage(
                 }
 
                 if (showEmptyConfirm) {
+                    val sizeLabel = if (trashStats != null && trashStats!!.totalBytes > 0) " (${formatSize(trashStats!!.totalBytes)})" else ""
                     ConfirmDialog(
                         title = "Empty Trash?",
-                        message = "All items in Trash will be permanently deleted.\n\nThis cannot be undone.",
+                        message = "All items$sizeLabel in Trash will be permanently deleted.\n\nThis cannot be undone.",
                         confirmLabel = "Empty",
                         onDismiss = { showEmptyConfirm = false },
                         onConfirm = {
@@ -451,6 +472,7 @@ private fun MainSettingsPage(
                             val app = context.zibzipApp
                             app.appScope.launch {
                                 val count = app.trash.emptyTrash()
+                                trashStats = app.trash.getTrashStats()
                                 app.toast(if (count > 0) "Emptied $count items from trash" else "Trash is already empty")
                             }
                         },

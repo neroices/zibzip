@@ -37,7 +37,11 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -46,6 +50,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import dev.neroices.zibzip.data.TrashStats
 import dev.neroices.zibzip.domain.StorageVolumeInfo
 import dev.neroices.zibzip.domain.formatSize
 import dev.neroices.zibzip.zibzipApp
@@ -94,6 +99,11 @@ fun StorageBottomSheet(
             }
 
             if (useTrash) {
+                var trashStats by remember { mutableStateOf<TrashStats?>(null) }
+                LaunchedEffect(Unit) {
+                    trashStats = context.zibzipApp.trash.getTrashStats()
+                }
+
                 Surface(
                     onClick = onOpenTrash,
                     shape = RoundedCornerShape(20.dp),
@@ -128,7 +138,16 @@ fun StorageBottomSheet(
                                 color = cs.onSurface,
                             )
                             Text(
-                                text = "Restore or permanently delete items",
+                                text = when {
+                                    trashStats == null -> "Restore or permanently delete items"
+                                    trashStats!!.count == 0 -> "Empty"
+                                    else -> {
+                                        val count = trashStats!!.count
+                                        val unit = if (count == 1) "item" else "items"
+                                        val bytes = formatSize(trashStats!!.totalBytes)
+                                        "$count $unit · $bytes"
+                                    }
+                                },
                                 style = MaterialTheme.typography.bodySmall,
                                 color = cs.onSurfaceVariant,
                             )
