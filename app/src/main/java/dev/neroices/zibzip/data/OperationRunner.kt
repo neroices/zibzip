@@ -5,6 +5,7 @@ import dev.neroices.zibzip.domain.ProgressListener
 import dev.neroices.zibzip.domain.userMessage
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -75,7 +76,7 @@ class OperationRunner(private val scope: CoroutineScope) {
 
         _tasks.update { it + initialTask }
 
-        val job = scope.launch(Dispatchers.IO + CancelTokenContext(token)) {
+        val job = scope.launch(Dispatchers.IO + CancelTokenContext(token), start = CoroutineStart.LAZY) {
             var lastTime = System.currentTimeMillis()
             var lastDone = 0L
             var currentSpeed = 0L
@@ -130,6 +131,7 @@ class OperationRunner(private val scope: CoroutineScope) {
         }
 
         activeTasks[taskId] = RunningTask(taskId, title, token, job)
+        job.start()
         return true
     }
 

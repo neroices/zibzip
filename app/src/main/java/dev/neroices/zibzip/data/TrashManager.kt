@@ -308,7 +308,6 @@ class TrashManager(
                 java.nio.file.Files.move(
                     item.trashFile.toPath(),
                     target.toPath(),
-                    java.nio.file.StandardCopyOption.REPLACE_EXISTING,
                 )
                 restored = true
             } catch (_: Throwable) {
@@ -317,9 +316,9 @@ class TrashManager(
         if (!restored) {
             try {
                 if (item.trashFile.isDirectory) {
-                    item.trashFile.copyRecursively(target, overwrite = true)
+                    item.trashFile.copyRecursively(target, overwrite = false)
                 } else {
-                    item.trashFile.copyTo(target, overwrite = true)
+                    item.trashFile.copyTo(target, overwrite = false)
                 }
                 if (target.exists()) {
                     item.trashFile.deleteRecursively()
@@ -341,8 +340,11 @@ class TrashManager(
         } else {
             item.trashFile.delete()
         }
-        item.infoFile.delete()
-        deleted || !item.trashFile.exists()
+        val isGone = deleted || !item.trashFile.exists()
+        if (isGone) {
+            item.infoFile.delete()
+        }
+        isGone
     }
 
     /** Empties all trash directories across all volumes. */
