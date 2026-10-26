@@ -207,5 +207,15 @@ class TrashManagerTest {
         assertEquals("special", restored.readText())
         assertEquals("file with \"quotes\" & comma, and spaces.txt", restored.name)
     }
+
+    @Test(expected = dev.neroices.zibzip.domain.ZibzipException.Io::class)
+    fun restore_throwsWhenTrashFileDoesNotExist() = runBlocking {
+        val file = tmp.newFile("missing.txt").apply { writeText("data") }
+        trashManager.moveToTrash(listOf(file))
+        val item = trashManager.listTrash().first()
+        item.trashFile.delete()
+        trashManager.restore(item)
+        Unit
+    }
 }
 

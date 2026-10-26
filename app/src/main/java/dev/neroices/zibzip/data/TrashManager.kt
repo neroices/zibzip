@@ -1,6 +1,7 @@
 package dev.neroices.zibzip.data
 
 import dev.neroices.zibzip.domain.ProgressListener
+import dev.neroices.zibzip.domain.ZibzipException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
@@ -329,8 +330,10 @@ class TrashManager(
         }
         if (restored) {
             item.infoFile.delete()
+            target
+        } else {
+            throw ZibzipException.Io("Could not restore \"${item.originalName}\"")
         }
-        target
     }
 
     /** Permanently deletes [item] from trash. */

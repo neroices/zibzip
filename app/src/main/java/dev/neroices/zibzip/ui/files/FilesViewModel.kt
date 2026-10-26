@@ -375,8 +375,12 @@ class FilesViewModel(application: Application) : AndroidViewModel(application) {
     fun deletePermanentlyFromTrash(item: TrashedItem) {
         viewModelScope.launch {
             try {
-                app.trash.deletePermanently(item)
-                app.toast("Permanently deleted \"${item.originalName}\"")
+                val deleted = app.trash.deletePermanently(item)
+                if (deleted) {
+                    app.toast("Permanently deleted \"${item.originalName}\"")
+                } else {
+                    app.toast("Failed to delete \"${item.originalName}\"")
+                }
                 refreshTrash()
             } catch (t: Throwable) {
                 app.toast(t.userMessage())
