@@ -72,6 +72,8 @@ import dev.neroices.zibzip.ui.image.ImageViewerArgs
 import dev.neroices.zibzip.ui.image.ImageViewerScreen
 import dev.neroices.zibzip.ui.pdf.PdfViewerArgs
 import dev.neroices.zibzip.ui.pdf.PdfViewerScreen
+import dev.neroices.zibzip.ui.video.VideoPlayerArgs
+import dev.neroices.zibzip.ui.video.VideoPlayerScreen
 import dev.neroices.zibzip.ui.settings.SettingsScreen
 import kotlinx.coroutines.launch
 
@@ -124,6 +126,7 @@ fun ZibzipRoot() {
 
     var tab by rememberSaveable { mutableStateOf(Tab.Files) }
     var imageViewerArgs by remember { mutableStateOf<ImageViewerArgs?>(null) }
+    var videoPlayerArgs by remember { mutableStateOf<VideoPlayerArgs?>(null) }
     var textEditorArgs by remember { mutableStateOf<TextEditorArgs?>(null) }
     var pdfViewerArgs by remember { mutableStateOf<PdfViewerArgs?>(null) }
     val snackbar = remember { SnackbarHostState() }
@@ -167,6 +170,7 @@ fun ZibzipRoot() {
         enabled = true,
     ) {
         when {
+            videoPlayerArgs != null -> videoPlayerArgs = null
             pdfViewerArgs != null -> pdfViewerArgs = null
             textEditorArgs != null -> textEditorArgs = null
             imageViewerArgs != null -> imageViewerArgs = null
@@ -220,6 +224,7 @@ fun ZibzipRoot() {
                         showFab = clipboard == null,
                         hasActiveOperations = runningTasks.isNotEmpty(),
                         onOpenImage = { imgs, idx -> imageViewerArgs = ImageViewerArgs(imgs, idx) },
+                        onOpenVideo = { path -> videoPlayerArgs = VideoPlayerArgs(path) },
                         onOpenText = { path, isReadOnly -> textEditorArgs = TextEditorArgs(path, isReadOnly) },
                         onOpenPdf = { path -> pdfViewerArgs = PdfViewerArgs(path) },
                     )
@@ -232,6 +237,7 @@ fun ZibzipRoot() {
                         vm = archivesVm,
                         state = viewer,
                         onOpenImage = { path -> imageViewerArgs = ImageViewerArgs(listOf(path), 0) },
+                        onOpenVideo = { path -> videoPlayerArgs = VideoPlayerArgs(path) },
                         onOpenText = { path -> textEditorArgs = TextEditorArgs(path, isReadOnly = true) },
                         onOpenPdf = { path -> pdfViewerArgs = PdfViewerArgs(path) },
                     )
@@ -239,7 +245,7 @@ fun ZibzipRoot() {
             }
         }
 
-        if (imageViewerArgs == null && textEditorArgs == null && pdfViewerArgs == null) {
+        if (imageViewerArgs == null && videoPlayerArgs == null && textEditorArgs == null && pdfViewerArgs == null) {
             Column(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
@@ -303,6 +309,13 @@ fun ZibzipRoot() {
                     onClose = { textEditorArgs = null },
                 )
             }
+        }
+
+        videoPlayerArgs?.let { args ->
+            VideoPlayerScreen(
+                path = args.path,
+                onClose = { videoPlayerArgs = null },
+            )
         }
 
         pdfViewerArgs?.let { args ->

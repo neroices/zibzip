@@ -85,6 +85,11 @@ object FileTypes {
         return ext in audio
     }
 
+    fun isVideoFile(name: String): Boolean {
+        val ext = name.substringAfterLast('.', "").lowercase()
+        return ext in video
+    }
+
     fun kindOf(name: String, isDirectory: Boolean): FileKind {
         if (isDirectory) return FileKind.Folder
         if (ArchiveFormat.detect(name) != null) return FileKind.Archive

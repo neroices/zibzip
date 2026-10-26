@@ -326,6 +326,7 @@ class ArchivesViewModel(application: Application) : AndroidViewModel(application
     fun preview(
         entry: ArchiveEntryItem,
         onOpenImage: ((String) -> Unit)? = null,
+        onOpenVideo: ((String) -> Unit)? = null,
         onOpenText: ((String) -> Unit)? = null,
         onOpenPdf: ((String) -> Unit)? = null,
     ) {
@@ -347,9 +348,12 @@ class ArchivesViewModel(application: Application) : AndroidViewModel(application
             val isText = (FileTypes.isTextFile(entry.name) || FileTypes.isTextFile(extractedFile)) && onOpenText != null
             val isAudio = FileTypes.isAudioFile(entry.name)
             val isImage = FileTypes.kindOf(entry.name, false) == FileKind.Image && onOpenImage != null
+            val isVideo = (FileTypes.kindOf(entry.name, false) == FileKind.Video || FileTypes.isVideoFile(entry.name)) && onOpenVideo != null
             withContext(Dispatchers.Main) {
                 if (isImage) {
                     onOpenImage(extractedPath)
+                } else if (isVideo) {
+                    onOpenVideo(extractedPath)
                 } else if (isPdf) {
                     onOpenPdf(extractedPath)
                 } else if (isText) {

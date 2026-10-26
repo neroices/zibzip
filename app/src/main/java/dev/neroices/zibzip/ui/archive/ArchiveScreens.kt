@@ -142,6 +142,7 @@ fun ArchiveViewerScreen(
     state: ViewerState,
     modifier: Modifier = Modifier,
     onOpenImage: (String) -> Unit = {},
+    onOpenVideo: (String) -> Unit = {},
     onOpenText: (String) -> Unit = {},
     onOpenPdf: (String) -> Unit = {},
 ) {
@@ -215,7 +216,7 @@ fun ArchiveViewerScreen(
                                                 when {
                                                     state.selection.isNotEmpty() -> vm.toggleSelection(entry.path)
                                                     entry.isDirectory -> vm.enter(entry.path)
-                                                    else -> vm.preview(entry, onOpenImage, onOpenText, onOpenPdf)
+                                                    else -> vm.preview(entry, onOpenImage, onOpenVideo, onOpenText, onOpenPdf)
                                                 }
                                             },
                                             onLongClick = { vm.toggleSelection(entry.path) },

@@ -21,6 +21,7 @@ Completely offline, with no ads, analytics, or network permissions. Requires And
   - Material 3 design and Dynamic Color
 
 - **Built-in Utilities**
+  - Video player powered by AndroidX Media3 with gesture controls and playback speed options
   - Audio player with background playback support
   - Code and text editor with syntax highlighting and Markdown preview
 
@@ -32,6 +33,7 @@ Completely offline, with no ads, analytics, or network permissions. Requires And
   - RAR (`.rar`): Reads v1.5 through v7.0, creates v5.0, password decryption, levels 0 to 9
   - TAR (`.tar`, `.tar.gz`, `.tar.bz2`, `.tar.xz`): Standard uncompressed `.tar`, and compressed tarballs with levels 0 to 9
   - Single compressed files (`.gz`, `.bz2`, `.xz`): Direct compression and extraction, levels 0 to 9
+- **Video playback**: MP4, MKV, WebM, AVI, MOV, 3GP, M4V, FLV
 - **Audio playback**: MP3, FLAC, WAV, OGG, M4A, AAC, OPUS, AMR
 - **Syntax highlighting**: Kotlin, Java, Rust, Python, Go, C/C++, TypeScript, JavaScript, HTML, CSS, JSON, YAML, TOML, Markdown, Shell, SQL, and more
 

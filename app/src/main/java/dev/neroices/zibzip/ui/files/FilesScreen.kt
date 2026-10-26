@@ -123,6 +123,7 @@ fun FilesScreen(
     modifier: Modifier = Modifier,
     hasActiveOperations: Boolean = false,
     onOpenImage: (images: List<String>, initialIndex: Int) -> Unit = { _, _ -> },
+    onOpenVideo: (path: String) -> Unit = {},
     onOpenText: (path: String, isReadOnly: Boolean) -> Unit = { _, _ -> },
     onOpenPdf: (path: String) -> Unit = {},
 ) {
@@ -171,6 +172,9 @@ fun FilesScreen(
                                     val imagePaths = items.filter { it.kind == FileKind.Image && !it.isDirectory }.map { it.path }
                                     val initialIndex = imagePaths.indexOf(item.path).coerceAtLeast(0)
                                     onOpenImage(imagePaths, initialIndex)
+                                }
+                                item.kind == FileKind.Video || FileTypes.isVideoFile(item.name) -> {
+                                    onOpenVideo(item.path)
                                 }
                                 item.kind == FileKind.Audio || FileTypes.isAudioFile(item.name) -> {
                                     val audioPaths = items

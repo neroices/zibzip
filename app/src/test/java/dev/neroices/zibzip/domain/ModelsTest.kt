@@ -93,6 +93,17 @@ class ModelsTest {
     }
 
     @Test
+    fun fileTypes_videoDetection() {
+        org.junit.Assert.assertTrue(FileTypes.isVideoFile("movie.mp4"))
+        org.junit.Assert.assertTrue(FileTypes.isVideoFile("clip.MKV"))
+        org.junit.Assert.assertTrue(FileTypes.isVideoFile("stream.webm"))
+        org.junit.Assert.assertTrue(FileTypes.isVideoFile("video.avi"))
+        org.junit.Assert.assertFalse(FileTypes.isVideoFile("song.mp3"))
+        org.junit.Assert.assertFalse(FileTypes.isVideoFile("photo.png"))
+        org.junit.Assert.assertFalse(FileTypes.isVideoFile("document.pdf"))
+    }
+
+    @Test
     fun audioTrack_metadataDefaultsAndOverrides() {
         val defaultTrack = dev.neroices.zibzip.audio.AudioTrack(
             path = "/storage/music/song.mp3",
