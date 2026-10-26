@@ -175,6 +175,9 @@ object NaturalOrder : Comparator<String> {
                     val d = a[si + k].compareTo(b[sj + k])
                     if (d != 0) return d
                 }
+                val origLenA = ei - i
+                val origLenB = ej - j
+                if (origLenA != origLenB) return origLenA.compareTo(origLenB)
                 i = ei
                 j = ej
             } else {

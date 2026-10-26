@@ -63,6 +63,12 @@ pub fn natural_cmp(a: &str, b: &str) -> Ordering {
                 }
             }
 
+            let orig_len_a = ei - i;
+            let orig_len_b = ej - j;
+            if orig_len_a != orig_len_b {
+                return orig_len_a.cmp(&orig_len_b);
+            }
+
             i = ei;
             j = ej;
         } else {
@@ -104,8 +110,8 @@ pub fn sort_entries(
                 .cmp(&b.last_modified)
                 .then_with(|| natural_cmp(&a.name, &b.name)),
             3 => {
-                let ext_a = a.name.rsplit('.').next().unwrap_or("").to_ascii_lowercase();
-                let ext_b = b.name.rsplit('.').next().unwrap_or("").to_ascii_lowercase();
+                let ext_a = a.name.rfind('.').map(|idx| &a.name[idx + 1..]).unwrap_or("").to_ascii_lowercase();
+                let ext_b = b.name.rfind('.').map(|idx| &b.name[idx + 1..]).unwrap_or("").to_ascii_lowercase();
                 ext_a
                     .cmp(&ext_b)
                     .then_with(|| natural_cmp(&a.name, &b.name))
@@ -319,9 +325,19 @@ fn unique_child_path(dest_dir: &Path, name: &std::ffi::OsStr) -> PathBuf {
         return base;
     }
     let name_str = name.to_string_lossy();
-    let (stem, ext) = match name_str.rfind('.') {
-        Some(idx) if idx > 0 => (&name_str[..idx], &name_str[idx..]),
-        _ => (name_str.as_ref(), ""),
+    let lower = name_str.to_ascii_lowercase();
+    let compound_exts = [
+        ".tar.gz", ".tar.bz2", ".tar.xz", ".tar.zst",
+        ".tgz", ".tbz2", ".tbz", ".txz",
+    ];
+    let (stem, ext) = if let Some(&sfx) = compound_exts.iter().find(|&&ext| lower.ends_with(ext)) {
+        let stem_len = name_str.len() - sfx.len();
+        (&name_str[..stem_len], &name_str[stem_len..])
+    } else {
+        match name_str.rfind('.') {
+            Some(idx) if idx > 0 => (&name_str[..idx], &name_str[idx..]),
+            _ => (name_str.as_ref(), ""),
+        }
     };
     for i in 1..10000 {
         let candidate = dest_dir.join(format!("{} ({}){}", stem, i, ext));

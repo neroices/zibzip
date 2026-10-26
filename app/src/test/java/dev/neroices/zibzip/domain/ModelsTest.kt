@@ -13,6 +13,12 @@ class ModelsTest {
     }
 
     @Test
+    fun naturalOrder_breaksTieForLeadingZeros() {
+        val sorted = listOf("file00.txt", "file0.txt", "file1.txt").sortedWith(NaturalOrder)
+        assertEquals(listOf("file0.txt", "file00.txt", "file1.txt"), sorted)
+    }
+
+    @Test
     fun archiveFormat_detectsLongestSuffix() {
         assertEquals(ArchiveFormat.TAR_GZ, ArchiveFormat.detect("backup.tar.gz"))
         assertEquals(ArchiveFormat.TAR_GZ, ArchiveFormat.detect("BACKUP.TGZ"))
