@@ -148,6 +148,7 @@ class AudioPlayerController(private val context: Context) {
                 if (currentIndex < queue.size - 1) {
                     next()
                 } else {
+                    try { mp.seekTo(0) } catch (_: Exception) {}
                     _state.value = _state.value?.copy(isPlaying = false, positionMs = 0)
                     stopTicker()
                     AudioPlayerService.start(context)
@@ -218,7 +219,7 @@ class AudioPlayerController(private val context: Context) {
                             )
                             if (currentIndex in queue.indices && queue[currentIndex].path == track.path) {
                                 val newQueue = queue.toMutableList()
-                                newQueue[currentIndex] = updatedTrack
+                                newQueue[currentIndex] = updatedTrack.copy(albumArt = null)
                                 queue = newQueue
                             }
                             _state.value = current.copy(track = updatedTrack)
