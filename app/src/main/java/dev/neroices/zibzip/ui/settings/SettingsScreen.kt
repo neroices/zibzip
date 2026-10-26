@@ -182,6 +182,18 @@ val OpenSourceLibraries = listOf(
         "Apache-2.0",
         "https://developer.android.com/jetpack/androidx"
     ),
+    Library(
+        "AndroidX Media3 (ExoPlayer)",
+        "Video and media playback engine, UI components, and media session integration",
+        "Apache-2.0",
+        "https://developer.android.com/media/media3"
+    ),
+    Library(
+        "Kotlinx Serialization",
+        "Structured JSON serialization for trash metadata and state persistence",
+        "Apache-2.0",
+        "https://github.com/Kotlin/kotlinx.serialization"
+    ),
 )
 
 enum class SettingsSubpage {
