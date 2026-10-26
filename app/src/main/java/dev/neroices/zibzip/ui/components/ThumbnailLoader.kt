@@ -9,7 +9,6 @@ import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import android.media.MediaMetadataRetriever
 import android.media.ThumbnailUtils
-import android.os.Build
 import android.util.LruCache
 import android.util.Size
 import androidx.compose.runtime.Composable
@@ -22,8 +21,12 @@ import dev.neroices.zibzip.domain.FileKind
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.security.MessageDigest
 
 object ThumbnailLoader {
+
+    private const val MAX_DISK_CACHE_BYTES = 25L * 1024 * 1024
+    private var lastTrimTime = 0L
 
     private val maxMemoryKb = (Runtime.getRuntime().maxMemory() / 1024).toInt()
     private val cacheSizeKb = (maxMemoryKb / 8).coerceIn(16 * 1024, 64 * 1024)
@@ -54,6 +57,11 @@ object ThumbnailLoader {
         if (noThumbnailCache.get(key) == true) return null
 
         return withContext(Dispatchers.IO) {
+            readFromDiskCache(context, key)?.let { cached ->
+                cache.put(key, cached)
+                return@withContext cached
+            }
+
             val file = File(path)
             if (!file.exists() || !file.canRead()) return@withContext null
 
@@ -66,6 +74,7 @@ object ThumbnailLoader {
             }
 
             if (bitmap != null) {
+                saveToDiskCache(context, key, bitmap)
                 cache.put(key, bitmap)
             } else {
                 noThumbnailCache.put(key, true)
@@ -74,18 +83,59 @@ object ThumbnailLoader {
         }
     }
 
+    private fun diskCacheFile(context: Context, key: String): File {
+        val hash = MessageDigest.getInstance("SHA-256")
+            .digest(key.toByteArray())
+            .joinToString("") { "%02x".format(it) }
+        return File(File(context.cacheDir, "thumbnails"), "$hash.thumb")
+    }
+
+    private fun readFromDiskCache(context: Context, key: String): Bitmap? {
+        return try {
+            val file = diskCacheFile(context, key)
+            if (file.exists() && file.length() > 0) {
+                file.setLastModified(System.currentTimeMillis())
+                BitmapFactory.decodeFile(file.absolutePath)
+            } else null
+        } catch (_: Throwable) {
+            null
+        }
+    }
+
+    private fun saveToDiskCache(context: Context, key: String, bitmap: Bitmap) {
+        try {
+            val dir = File(context.cacheDir, "thumbnails").apply { if (!exists()) mkdirs() }
+            val file = diskCacheFile(context, key)
+            val tempFile = File(dir, "${file.name}.tmp")
+            tempFile.outputStream().use { out ->
+                bitmap.compress(Bitmap.CompressFormat.WEBP_LOSSY, 80, out)
+            }
+            tempFile.renameTo(file)
+            trimDiskCache(dir)
+        } catch (_: Throwable) {}
+    }
+
+    private fun trimDiskCache(dir: File) {
+        val now = System.currentTimeMillis()
+        if (now - lastTrimTime < 60_000) return
+        lastTrimTime = now
+        val files = dir.listFiles() ?: return
+        var totalSize = files.sumOf { it.length() }
+        if (totalSize > MAX_DISK_CACHE_BYTES) {
+            files.sortBy { it.lastModified() }
+            for (file in files) {
+                val len = file.length()
+                if (file.delete()) {
+                    totalSize -= len
+                    if (totalSize <= MAX_DISK_CACHE_BYTES * 3 / 4) break
+                }
+            }
+        }
+    }
+
     private fun decodeImageThumbnail(file: File, targetW: Int, targetH: Int): Bitmap? {
         return try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                ThumbnailUtils.createImageThumbnail(file, Size(targetW, targetH), null)
-            } else {
-                val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-                BitmapFactory.decodeFile(file.absolutePath, opts)
-                opts.inSampleSize = calculateInSampleSize(opts, targetW, targetH)
-                opts.inJustDecodeBounds = false
-                opts.inPreferredConfig = Bitmap.Config.RGB_565
-                BitmapFactory.decodeFile(file.absolutePath, opts)
-            }
+            ThumbnailUtils.createImageThumbnail(file, Size(targetW, targetH), null)
         } catch (_: Throwable) {
             null
         }
@@ -93,15 +143,7 @@ object ThumbnailLoader {
 
     private fun decodeVideoThumbnail(file: File, targetW: Int, targetH: Int): Bitmap? {
         return try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                ThumbnailUtils.createVideoThumbnail(file, Size(targetW, targetH), null)
-            } else {
-                @Suppress("DEPRECATION")
-                ThumbnailUtils.createVideoThumbnail(
-                    file.absolutePath,
-                    android.provider.MediaStore.Video.Thumbnails.MINI_KIND
-                )
-            }
+            ThumbnailUtils.createVideoThumbnail(file, Size(targetW, targetH), null)
         } catch (_: Throwable) {
             null
         }
