@@ -19,7 +19,7 @@ zstd = "0.14"
 bzip2 = "0.6"
 lzma-rust2 = { version = "0.23", default-features = false, features = ["std", "xz", "encoder"] }
 chrono = "0.4"
-rars = "0.11"
+rars = "0.12"
 
 [profile.release]
 opt-level = 3
