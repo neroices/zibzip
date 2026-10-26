@@ -7,8 +7,7 @@ updates:
       day: "monday"
     open-pull-requests-limit: 10
     commit-message:
-      prefix: "chore"
-      include: "scope"
+      prefix: "gradle"
     labels:
       - "dependencies"
     groups:
@@ -26,8 +25,7 @@ updates:
       day: "monday"
     open-pull-requests-limit: 10
     commit-message:
-      prefix: "chore"
-      include: "scope"
+      prefix: "cargo"
     labels:
       - "dependencies"
     groups:
@@ -45,8 +43,7 @@ updates:
       day: "monday"
     open-pull-requests-limit: 10
     commit-message:
-      prefix: "chore"
-      include: "scope"
+      prefix: "ci"
     labels:
       - "dependencies"
     groups:
