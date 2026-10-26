@@ -2,83 +2,14 @@ package dev.neroices.zibzip.data
 
 import dev.neroices.zibzip.domain.ArchiveFormat
 import dev.neroices.zibzip.domain.ZibzipException
-import dev.neroices.zibzip.domain.ProgressListener
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.currentCoroutineContext
-import kotlinx.coroutines.ensureActive
 import java.io.File
-import java.io.FileInputStream
 import java.io.FileNotFoundException
-import java.io.FileOutputStream
-import java.io.FilterInputStream
 import java.io.IOException
-import java.io.InputStream
 import java.nio.file.Files
 import java.nio.file.LinkOption
 
-internal const val BUFFER_SIZE = 128 * 1024
-
-/** Throttled bridge from byte counters to a [ProgressListener]. */
-class ProgressTracker(private val listener: ProgressListener, var total: Long) {
-    var done: Long = 0
-        private set
-    var current: String = ""
-    private var lastEmit = 0L
-
-    fun add(n: Long) {
-        done += n
-        maybeEmit()
-    }
-
-    fun set(value: Long) {
-        done = value
-        maybeEmit()
-    }
-
-    fun flush() = listener.onProgress(done, total, current)
-
-    private fun maybeEmit() {
-        val now = System.nanoTime()
-        if (now - lastEmit >= 100_000_000L) {
-            lastEmit = now
-            flush()
-        }
-    }
-}
-
-/** Counts the bytes consumed from the underlying stream (used for compressed-input progress). */
-internal class CountingInputStream(input: InputStream) : FilterInputStream(input) {
-    var count: Long = 0
-        private set
-
-    override fun read(): Int {
-        val b = super.read()
-        if (b >= 0) count++
-        return b
-    }
-
-    override fun read(b: ByteArray, off: Int, len: Int): Int {
-        val n = super.read(b, off, len)
-        if (n > 0) count += n
-        return n
-    }
-
-    override fun skip(n: Long): Long {
-        val s = super.skip(n)
-        if (s > 0) count += s
-        return s
-    }
-}
-
 internal object IoSupport {
-
-    fun checkSpace(dir: File, needed: Long) {
-        if (needed <= 0) return
-        val free = dir.usableSpace
-        if (needed > free) throw ZibzipException.InsufficientSpace(needed, free)
-    }
-
-    fun isSymlink(file: File): Boolean = Files.isSymbolicLink(file.toPath())
 
     private fun exists(file: File) = Files.exists(file.toPath(), LinkOption.NOFOLLOW_LINKS)
 
@@ -110,18 +41,6 @@ internal object IoSupport {
             if (!exists(candidate)) return candidate
             i++
         }
-    }
-
-    /** Resolves an archive entry path under [destDir], rejecting "zip-slip" traversal. */
-    fun safeResolve(destDir: File, relative: String): File {
-        val clean = relative.replace('\\', '/').trimStart('/')
-        val target = File(destDir, clean)
-        val base = destDir.canonicalPath
-        val canonical = target.canonicalPath
-        if (canonical != base && !canonical.startsWith(base + File.separator)) {
-            throw ZibzipException.Unsupported("Archive contains an unsafe path: $relative")
-        }
-        return target
     }
 
     fun validateName(name: String) {
@@ -158,31 +77,5 @@ internal object IoSupport {
     private fun isPermissionMessage(m: String?): Boolean {
         val s = m.orEmpty()
         return "EACCES" in s || "Permission denied" in s || "EPERM" in s || "Operation not permitted" in s
-    }
-
-    /** Streams [input] into [target], honouring coroutine cancellation and removing partial output on failure. */
-    suspend fun copyToFile(input: InputStream, target: File, onBytes: (Int) -> Unit) {
-        val ctx = currentCoroutineContext()
-        target.parentFile?.mkdirs()
-        try {
-            FileOutputStream(target).use { out ->
-                val buf = ByteArray(BUFFER_SIZE)
-                while (true) {
-                    ctx.ensureActive()
-                    val n = input.read(buf)
-                    if (n < 0) break
-                    out.write(buf, 0, n)
-                    onBytes(n)
-                }
-            }
-        } catch (t: Throwable) {
-            target.delete()
-            throw t
-        }
-    }
-
-    suspend fun copyFile(src: File, dst: File, onBytes: (Int) -> Unit) {
-        FileInputStream(src).use { copyToFile(it, dst, onBytes) }
-        dst.setLastModified(src.lastModified())
     }
 }

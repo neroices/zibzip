@@ -167,7 +167,9 @@ pub fn list_directory(
         });
     }
 
-    sort_entries(&mut items, sort_field, ascending, folders_first);
+    if sort_field >= 0 {
+        sort_entries(&mut items, sort_field, ascending, folders_first);
+    }
     Ok(items)
 }
 

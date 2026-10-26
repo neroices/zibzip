@@ -21,7 +21,7 @@ class FileLister {
     suspend fun list(
         dir: File,
         showHidden: Boolean,
-        sortField: Int = 0,
+        sortField: Int = -1,
         ascending: Boolean = true,
         foldersFirst: Boolean = true,
     ): List<FileItem> = withContext(Dispatchers.IO) {
