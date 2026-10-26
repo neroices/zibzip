@@ -103,6 +103,7 @@ import androidx.compose.ui.unit.dp
 import dev.neroices.zibzip.domain.formatSize
 import dev.neroices.zibzip.ui.openFile
 import dev.neroices.zibzip.ui.shareFiles
+import dev.neroices.zibzip.zibzipApp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
@@ -209,10 +210,12 @@ fun PdfViewerScreen(
 
     DisposableEffect(path) {
         onDispose {
-            scope.launch(pdfDispatcher) {
+            val renderer = pdfRenderer
+            val descriptor = pfd
+            context.zibzipApp.appScope.launch(pdfDispatcher) {
                 try {
-                    pdfRenderer?.close()
-                    pfd?.close()
+                    renderer?.close()
+                    descriptor?.close()
                     bitmapCache.evictAll()
                 } catch (_: Throwable) {}
             }
