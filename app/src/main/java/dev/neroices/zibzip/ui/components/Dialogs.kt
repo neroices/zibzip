@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -121,17 +122,18 @@ fun PopupDialogContainer(
             val maxDialogHeight = maxHeight
             Surface(
                 modifier = Modifier
+                    .widthIn(min = 280.dp, max = 380.dp)
                     .fillMaxWidth()
                     .heightIn(max = maxDialogHeight)
                     .wrapContentHeight(),
-                shape = RoundedCornerShape(28.dp),
+                shape = RoundedCornerShape(24.dp),
                 color = cs.surfaceContainerHigh,
                 tonalElevation = 6.dp,
             ) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(20.dp),
+                        .padding(18.dp),
                 ) {
                     // Header: Squircle Icon + Title & Subtitle
                     Row(
@@ -140,8 +142,8 @@ fun PopupDialogContainer(
                     ) {
                         Box(
                             modifier = Modifier
-                                .size(52.dp)
-                                .clip(RoundedCornerShape(16.dp))
+                                .size(46.dp)
+                                .clip(RoundedCornerShape(14.dp))
                                 .background(iconContainerColor),
                             contentAlignment = Alignment.Center,
                         ) {
@@ -149,17 +151,17 @@ fun PopupDialogContainer(
                                 imageVector = icon,
                                 contentDescription = null,
                                 tint = iconContentColor,
-                                modifier = Modifier.size(26.dp),
+                                modifier = Modifier.size(24.dp),
                             )
                         }
-                        Spacer(Modifier.width(16.dp))
+                        Spacer(Modifier.width(14.dp))
                         Column(Modifier.weight(1f)) {
                             Text(
                                 text = title,
                                 style = MaterialTheme.typography.titleLarge.copy(
                                     fontWeight = FontWeight.Bold,
-                                    fontSize = 19.sp,
-                                    lineHeight = 25.sp,
+                                    fontSize = 18.sp,
+                                    lineHeight = 24.sp,
                                 ),
                                 color = cs.onSurface,
                             )
@@ -175,7 +177,7 @@ fun PopupDialogContainer(
                     }
 
                     HorizontalDivider(
-                        modifier = Modifier.padding(top = 16.dp, bottom = 14.dp),
+                        modifier = Modifier.padding(top = 14.dp, bottom = 12.dp),
                         color = cs.outlineVariant.copy(alpha = 0.35f),
                     )
 
@@ -192,7 +194,7 @@ fun PopupDialogContainer(
                     BoxWithConstraints(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(top = 20.dp),
+                            .padding(top = 16.dp),
                     ) {
                         val fontScale = LocalDensity.current.fontScale
                         val longestLabel = maxOf(confirmLabel.length, cancelLabel.length)
@@ -204,16 +206,16 @@ fun PopupDialogContainer(
                     if (shouldStack) {
                         Column(
                             modifier = Modifier.fillMaxWidth(),
-                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             Button(
                                 onClick = onConfirm,
                                 enabled = confirmEnabled,
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .heightIn(min = 48.dp),
-                                shape = RoundedCornerShape(24.dp),
-                                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
+                                    .heightIn(min = 44.dp),
+                                shape = RoundedCornerShape(22.dp),
+                                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 9.dp),
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = if (destructive) cs.error else cs.primary,
                                     contentColor = if (destructive) cs.onError else cs.onPrimary,
@@ -233,9 +235,9 @@ fun PopupDialogContainer(
                                 onClick = onDismiss,
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .heightIn(min = 48.dp),
-                                shape = RoundedCornerShape(24.dp),
-                                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
+                                    .heightIn(min = 44.dp),
+                                shape = RoundedCornerShape(22.dp),
+                                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 9.dp),
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = cs.surfaceContainerHighest,
                                     contentColor = cs.onSurface,
@@ -254,7 +256,7 @@ fun PopupDialogContainer(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(IntrinsicSize.Min),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Button(
@@ -262,8 +264,8 @@ fun PopupDialogContainer(
                                 modifier = Modifier
                                     .weight(1f)
                                     .fillMaxHeight()
-                                    .heightIn(min = 48.dp),
-                                shape = RoundedCornerShape(24.dp),
+                                    .heightIn(min = 44.dp),
+                                shape = RoundedCornerShape(22.dp),
                                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = cs.surfaceContainerHighest,
@@ -286,8 +288,8 @@ fun PopupDialogContainer(
                                 modifier = Modifier
                                     .weight(1f)
                                     .fillMaxHeight()
-                                    .heightIn(min = 48.dp),
-                                shape = RoundedCornerShape(24.dp),
+                                    .heightIn(min = 44.dp),
+                                shape = RoundedCornerShape(22.dp),
                                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = if (destructive) cs.error else cs.primary,

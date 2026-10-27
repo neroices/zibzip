@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -177,16 +178,18 @@ fun DetailsBottomSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+        sheetMaxWidth = 440.dp,
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
         containerColor = cs.surfaceContainer,
         dragHandle = { BottomSheetDefaults.DragHandle() },
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp)
+                .widthIn(max = 440.dp)
+                .padding(horizontal = 18.dp)
                 .navigationBarsPadding()
-                .padding(bottom = 20.dp)
+                .padding(bottom = 18.dp)
                 .verticalScroll(rememberScrollState()),
         ) {
             // Header card
@@ -201,8 +204,8 @@ fun DetailsBottomSheet(
                     val thumbnail by rememberThumbnail(single.path, single.kind, single.lastModified)
                     Box(
                         modifier = Modifier
-                            .size(52.dp)
-                            .clip(RoundedCornerShape(14.dp))
+                            .size(46.dp)
+                            .clip(RoundedCornerShape(12.dp))
                             .background(visual.container),
                         contentAlignment = Alignment.Center,
                     ) {

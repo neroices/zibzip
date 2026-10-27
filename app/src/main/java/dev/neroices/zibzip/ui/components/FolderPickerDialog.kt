@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -141,17 +142,18 @@ fun FolderPickerDialog(
             val maxDialogHeight = maxHeight
             Surface(
                 modifier = Modifier
+                    .widthIn(min = 280.dp, max = 400.dp)
                     .fillMaxWidth()
-                    .heightIn(max = maxDialogHeight.coerceAtMost(620.dp))
-                    .height(maxDialogHeight.coerceAtMost(560.dp)),
-                shape = RoundedCornerShape(28.dp),
+                    .heightIn(max = maxDialogHeight.coerceAtMost(600.dp))
+                    .height(maxDialogHeight.coerceAtMost(520.dp)),
+                shape = RoundedCornerShape(24.dp),
                 color = cs.surfaceContainerHigh,
                 tonalElevation = 6.dp,
             ) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(20.dp),
+                        .padding(18.dp),
                 ) {
                 // Header: Title + Up button + New Folder button + Close
                 Row(
