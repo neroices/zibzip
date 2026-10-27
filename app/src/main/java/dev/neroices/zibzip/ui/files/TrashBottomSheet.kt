@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -54,6 +55,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.neroices.zibzip.data.TrashedItem
 import dev.neroices.zibzip.domain.FileTypes
 import dev.neroices.zibzip.domain.formatSize
+import dev.neroices.zibzip.ui.components.mouseDragScroll
 import dev.neroices.zibzip.ui.components.ConfirmDialog
 import dev.neroices.zibzip.ui.components.formatDate
 import dev.neroices.zibzip.ui.components.kindVisual
@@ -198,10 +200,13 @@ fun TrashBottomSheet(
                 }
             } else {
                 // List of items
+                val trashListState = rememberLazyListState()
                 LazyColumn(
+                    state = trashListState,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .heightIn(max = 480.dp),
+                        .heightIn(max = 480.dp)
+                        .mouseDragScroll(trashListState),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     items(

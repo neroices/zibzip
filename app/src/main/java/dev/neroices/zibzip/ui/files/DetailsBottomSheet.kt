@@ -69,6 +69,7 @@ import dev.neroices.zibzip.domain.formatSize
 import dev.neroices.zibzip.domain.itemsLabel
 import dev.neroices.zibzip.ui.components.formatDate
 import dev.neroices.zibzip.ui.components.kindVisual
+import dev.neroices.zibzip.ui.components.mouseDragScroll
 import dev.neroices.zibzip.ui.components.rememberThumbnail
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
@@ -183,6 +184,7 @@ fun DetailsBottomSheet(
         containerColor = cs.surfaceContainer,
         dragHandle = { BottomSheetDefaults.DragHandle() },
     ) {
+        val scrollState = rememberScrollState()
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -190,7 +192,8 @@ fun DetailsBottomSheet(
                 .padding(horizontal = 18.dp)
                 .navigationBarsPadding()
                 .padding(bottom = 18.dp)
-                .verticalScroll(rememberScrollState()),
+                .verticalScroll(scrollState)
+                .mouseDragScroll(scrollState),
         ) {
             // Header card
             Row(

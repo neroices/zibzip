@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.PhoneAndroid
@@ -44,6 +45,7 @@ import dev.neroices.zibzip.ui.archive.ExtractDialog
 import dev.neroices.zibzip.ui.components.FileRow
 import dev.neroices.zibzip.ui.components.NameDialog
 import dev.neroices.zibzip.ui.components.SelectionBar
+import dev.neroices.zibzip.ui.components.mouseDragScroll
 import dev.neroices.zibzip.ui.shareFiles
 import dev.neroices.zibzip.zibzipApp
 import java.io.File
@@ -57,8 +59,12 @@ internal fun StorageOverview(volumes: List<StorageVolumeInfo>, onOpen: (String) 
     val shortcuts = remember(primary) {
         shortcutFolders.map { File(primary, it) }.filter { it.isDirectory }
     }
+    val listState = rememberLazyListState()
     LazyColumn(
-        modifier = Modifier.fillMaxSize(),
+        state = listState,
+        modifier = Modifier
+            .fillMaxSize()
+            .mouseDragScroll(listState),
         contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 4.dp, bottom = LocalFloatingBarClearance.current),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {

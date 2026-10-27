@@ -54,6 +54,7 @@ import androidx.compose.ui.unit.dp
 import dev.neroices.zibzip.data.TrashStats
 import dev.neroices.zibzip.domain.StorageVolumeInfo
 import dev.neroices.zibzip.domain.formatSize
+import dev.neroices.zibzip.ui.components.mouseDragScroll
 import dev.neroices.zibzip.zibzipApp
 import java.io.File
 
@@ -85,11 +86,13 @@ fun StorageBottomSheet(
         containerColor = cs.surfaceContainer,
         dragHandle = { BottomSheetDefaults.DragHandle() },
     ) {
+        val scrollState = rememberScrollState()
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .widthIn(max = 440.dp)
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(scrollState)
+                .mouseDragScroll(scrollState)
                 .padding(horizontal = 18.dp)
                 .padding(bottom = 28.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),

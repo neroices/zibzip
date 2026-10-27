@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -348,8 +349,12 @@ fun FolderPickerDialog(
                         }
 
                         else -> {
+                            val folderListState = rememberLazyListState()
                             LazyColumn(
-                                modifier = Modifier.fillMaxWidth(),
+                                state = folderListState,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .mouseDragScroll(folderListState),
                                 verticalArrangement = Arrangement.spacedBy(4.dp),
                             ) {
                                 if (showNavigateUp) {

@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
@@ -58,6 +59,7 @@ import dev.neroices.zibzip.ui.archive.ExtractDialog
 import dev.neroices.zibzip.ui.components.FileRow
 import dev.neroices.zibzip.ui.components.LoadingState
 import dev.neroices.zibzip.ui.components.PasswordDialog
+import dev.neroices.zibzip.ui.components.mouseDragScroll
 import dev.neroices.zibzip.ui.components.formatDate
 import dev.neroices.zibzip.ui.files.FloatingBarClearance
 import dev.neroices.zibzip.ui.files.LocalFloatingBarClearance
@@ -66,6 +68,7 @@ import dev.neroices.zibzip.ui.files.LocalFloatingBarClearance
 fun ArchivesScreen(vm: ArchivesViewModel, modifier: Modifier = Modifier) {
     val state by vm.list.collectAsStateWithLifecycle()
     val cs = MaterialTheme.colorScheme
+    val listState = rememberLazyListState()
     LaunchedEffect(Unit) { vm.scan() }
 
     Column(modifier.fillMaxSize().statusBarsPadding()) {
@@ -103,7 +106,10 @@ fun ArchivesScreen(vm: ArchivesViewModel, modifier: Modifier = Modifier) {
                 )
 
                 else -> LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
+                    state = listState,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .mouseDragScroll(listState),
                     contentPadding = PaddingValues(top = 2.dp, bottom = LocalFloatingBarClearance.current),
                 ) {
                     items(
@@ -149,6 +155,7 @@ fun ArchiveViewerScreen(
     val clipboard by vm.clipboard.collectAsStateWithLifecycle()
     val settings by vm.settings.collectAsStateWithLifecycle()
     val cs = MaterialTheme.colorScheme
+    val listState = rememberLazyListState()
 
     Surface(modifier.fillMaxSize(), color = cs.surface) {
         Column(Modifier.fillMaxSize().statusBarsPadding()) {
@@ -173,7 +180,10 @@ fun ArchiveViewerScreen(
                             EmptyState(Icons.Rounded.FolderZip, "This folder is empty")
                         } else {
                             LazyColumn(
-                                modifier = Modifier.fillMaxSize(),
+                                state = listState,
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .mouseDragScroll(listState),
                                 contentPadding = PaddingValues(top = 2.dp, bottom = LocalFloatingBarClearance.current),
                             ) {
                                 if (showNavigateUp) {

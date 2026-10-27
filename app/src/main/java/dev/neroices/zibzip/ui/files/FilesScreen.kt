@@ -97,6 +97,7 @@ import dev.neroices.zibzip.domain.SortField
 import dev.neroices.zibzip.domain.StorageVolumeInfo
 import dev.neroices.zibzip.domain.formatSize
 import dev.neroices.zibzip.domain.itemsLabel
+import dev.neroices.zibzip.ui.components.mouseDragScroll
 import dev.neroices.zibzip.zibzipApp
 import dev.neroices.zibzip.ui.archive.CompressDialog
 import dev.neroices.zibzip.ui.components.ConfirmDialog
@@ -799,7 +800,9 @@ private fun FileList(
                     key(ui.path) {
                         LazyColumn(
                             state = lazyListState,
-                            modifier = Modifier.fillMaxSize(),
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .mouseDragScroll(lazyListState),
                             contentPadding = PaddingValues(top = 2.dp, bottom = LocalFloatingBarClearance.current),
                         ) {
                             if (showNavigateUp) {
