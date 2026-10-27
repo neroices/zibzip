@@ -243,3 +243,110 @@ fn test_tar_preserves_mtime() {
 
     let _ = fs::remove_dir_all(&temp_dir);
 }
+
+#[test]
+fn test_zip_part_extension_editing() {
+    let temp_dir = std::env::temp_dir().join(format!(
+        "zibzip_test_zip_part_{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    fs::create_dir_all(&temp_dir).unwrap();
+    let zip_path = temp_dir.join("test.zip.part");
+
+    let init_file = temp_dir.join("init.txt");
+    fs::write(&init_file, b"initial payload").unwrap();
+    create_archive(
+        &[init_file],
+        &zip_path,
+        "ZIP",
+        3,
+        None,
+        std::ptr::null(),
+        |_, _, _| Ok(()),
+    )
+    .unwrap();
+
+    let extra_file = temp_dir.join("extra.txt");
+    fs::write(&extra_file, b"extra payload").unwrap();
+
+    // Adding entries to an archive named .part must not truncate it to 0 bytes
+    let added = add_zip_entries(
+        &zip_path,
+        "",
+        &[extra_file],
+        3,
+        None,
+        std::ptr::null(),
+        |_, _, _| Ok(()),
+    )
+    .unwrap();
+    assert_eq!(added, 1);
+
+    {
+        let file = std::fs::File::open(&zip_path).unwrap();
+        let mut archive = ::zip::ZipArchive::new(file).unwrap();
+        assert_eq!(archive.len(), 2);
+        let names: Vec<String> = (0..archive.len())
+            .map(|i| archive.by_index(i).unwrap().name().to_string())
+            .collect();
+        assert!(names.iter().any(|n| n == "init.txt"));
+        assert!(names.iter().any(|n| n == "extra.txt"));
+    }
+
+    let removed = remove_zip_entries(
+        &zip_path,
+        &["extra.txt".to_string()],
+        std::ptr::null(),
+        |_, _, _| Ok(()),
+    )
+    .unwrap();
+    assert_eq!(removed, 1);
+
+    {
+        let file = std::fs::File::open(&zip_path).unwrap();
+        let mut archive = ::zip::ZipArchive::new(file).unwrap();
+        assert_eq!(archive.len(), 1);
+        let name = archive.by_index(0).unwrap().name().to_string();
+        assert_eq!(name, "init.txt");
+    }
+
+    let _ = fs::remove_dir_all(&temp_dir);
+}
+
+#[test]
+fn test_archive_creation_into_self() {
+    let temp_dir = std::env::temp_dir().join(format!(
+        "zibzip_test_self_pack_{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    let src_dir = temp_dir.join("src");
+    fs::create_dir_all(&src_dir).unwrap();
+    fs::write(src_dir.join("file.txt"), b"test content").unwrap();
+
+    // Create archive directly inside the folder being compressed
+    let out_archive = src_dir.join("out.zip");
+    create_archive(
+        &[src_dir.clone()],
+        &out_archive,
+        "ZIP",
+        3,
+        None,
+        std::ptr::null(),
+        |_, _, _| Ok(()),
+    )
+    .unwrap();
+
+    let entries = list_entries(&out_archive, None).unwrap();
+    let paths: Vec<String> = entries.into_iter().map(|e| e.path).collect();
+    // Must NOT contain out.zip or out.zip.part inside the archive
+    assert!(paths.iter().any(|p| p.ends_with("file.txt")));
+    assert!(!paths.iter().any(|p| p.contains("out.zip")));
+
+    let _ = fs::remove_dir_all(&temp_dir);
+}

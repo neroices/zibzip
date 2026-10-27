@@ -162,6 +162,7 @@ pub(crate) fn extract_zip(
 
 pub(crate) fn create_zip(
     sources: &[PathBuf],
+    output_path: &Path,
     part_path: &Path,
     level: i32,
     password: Option<&str>,
@@ -203,10 +204,13 @@ pub(crate) fn create_zip(
             }
 
             let entry = entry?;
-            let rel = entry
-                .path()
+            let entry_path = entry.path();
+            if entry_path == part_path || entry_path == output_path {
+                continue;
+            }
+            let rel = entry_path
                 .strip_prefix(root_parent)
-                .unwrap_or(entry.path());
+                .unwrap_or(entry_path);
             let rel_str = rel.to_string_lossy().replace('\\', "/");
 
             if entry.file_type().is_dir() {
@@ -241,13 +245,30 @@ pub(crate) fn create_zip(
     Ok(written_bytes)
 }
 
+struct TempFileGuard<'a>(&'a Path, bool);
+impl<'a> Drop for TempFileGuard<'a> {
+    fn drop(&mut self) {
+        if !self.1 {
+            let _ = fs::remove_file(self.0);
+        }
+    }
+}
+
 pub fn remove_zip_entries(
     archive_path: &Path,
     paths_to_remove: &[String],
     cancel_token: *const AtomicBool,
     mut on_progress: impl FnMut(i64, i64, &str) -> Result<(), ()>,
 ) -> Result<i32, Box<dyn std::error::Error + Send + Sync>> {
-    let part_path = archive_path.with_extension("part");
+    let part_name = format!(
+        "{}.tmp_edit",
+        archive_path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("archive")
+    );
+    let part_path = archive_path.with_file_name(part_name);
+    let mut guard = TempFileGuard(&part_path, false);
     let file = File::open(archive_path)?;
     let mut zip_in = ZipArchive::new(BufReader::with_capacity(BUFFER_SIZE, file))?;
     let out_file = File::create(&part_path)?;
@@ -258,7 +279,6 @@ pub fn remove_zip_entries(
 
     for i in 0..total {
         if !cancel_token.is_null() && unsafe { (*cancel_token).load(AtomicOrdering::Relaxed) } {
-            let _ = fs::remove_file(&part_path);
             return Err("Operation cancelled".into());
         }
 
@@ -281,6 +301,7 @@ pub fn remove_zip_entries(
 
     zip_out.finish()?;
     fs::rename(&part_path, archive_path)?;
+    guard.1 = true;
     Ok(removed_count)
 }
 
@@ -293,7 +314,15 @@ pub fn add_zip_entries(
     cancel_token: *const AtomicBool,
     mut on_progress: impl FnMut(i64, i64, &str) -> Result<(), ()>,
 ) -> Result<i32, Box<dyn std::error::Error + Send + Sync>> {
-    let part_path = archive_path.with_extension("part");
+    let part_name = format!(
+        "{}.tmp_edit",
+        archive_path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("archive")
+    );
+    let part_path = archive_path.with_file_name(part_name);
+    let mut guard = TempFileGuard(&part_path, false);
     let file = File::open(archive_path)?;
     let mut zip_in = ZipArchive::new(BufReader::with_capacity(BUFFER_SIZE, file))?;
     let out_file = File::create(&part_path)?;
@@ -307,10 +336,13 @@ pub fn add_zip_entries(
     for src in source_paths {
         let root_parent = src.parent().unwrap_or(src);
         for entry in WalkDir::new(src).into_iter().flatten() {
-            let rel_from_root = entry
-                .path()
+            let entry_path = entry.path();
+            if entry_path == part_path || entry_path == archive_path {
+                continue;
+            }
+            let rel_from_root = entry_path
                 .strip_prefix(root_parent)
-                .unwrap_or(entry.path());
+                .unwrap_or(entry_path);
             let rel_str = rel_from_root.to_string_lossy().replace('\\', "/");
             let rel = if inner_clean.is_empty() {
                 rel_str
@@ -324,7 +356,6 @@ pub fn add_zip_entries(
     // First copy existing entries with raw copying (preserves encryption/compression)
     for i in 0..zip_in.len() {
         if !cancel_token.is_null() && unsafe { (*cancel_token).load(AtomicOrdering::Relaxed) } {
-            let _ = fs::remove_file(&part_path);
             return Err("Operation cancelled".into());
         }
 
@@ -362,15 +393,17 @@ pub fn add_zip_entries(
 
         for entry in WalkDir::new(src) {
             if !cancel_token.is_null() && unsafe { (*cancel_token).load(AtomicOrdering::Relaxed) } {
-                let _ = fs::remove_file(&part_path);
                 return Err("Operation cancelled".into());
             }
 
             let entry = entry?;
-            let rel_from_root = entry
-                .path()
+            let entry_path = entry.path();
+            if entry_path == part_path || entry_path == archive_path {
+                continue;
+            }
+            let rel_from_root = entry_path
                 .strip_prefix(root_parent)
-                .unwrap_or(entry.path());
+                .unwrap_or(entry_path);
             let rel_str = rel_from_root.to_string_lossy().replace('\\', "/");
             let rel = if inner_clean.is_empty() {
                 rel_str
@@ -399,5 +432,6 @@ pub fn add_zip_entries(
 
     zip_out.finish()?;
     fs::rename(&part_path, archive_path)?;
+    guard.1 = true;
     Ok(added_count)
 }

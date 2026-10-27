@@ -18,6 +18,19 @@ pub use zip::{add_zip_entries, remove_zip_entries};
 
 pub const BUFFER_SIZE: usize = 256 * 1024;
 
+pub(crate) struct CountingReader<R> {
+    pub(crate) inner: R,
+    pub(crate) bytes_read: std::sync::Arc<std::sync::atomic::AtomicI64>,
+}
+
+impl<R: std::io::Read> std::io::Read for CountingReader<R> {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        let n = self.inner.read(buf)?;
+        self.bytes_read.fetch_add(n as i64, std::sync::atomic::Ordering::Relaxed);
+        Ok(n)
+    }
+}
+
 pub fn list_entries(
     archive_path: &Path,
     password: Option<&str>,
@@ -250,6 +263,7 @@ pub fn create_archive(
     let result = match format_str.to_ascii_uppercase().as_str() {
         "ZIP" => zip::create_zip(
             sources,
+            output_path,
             &part_path,
             level,
             password,
@@ -259,6 +273,7 @@ pub fn create_archive(
         ),
         "7Z" => sevenz::create_sevenz(
             sources,
+            output_path,
             &part_path,
             total_bytes,
             cancel_token,
@@ -266,6 +281,7 @@ pub fn create_archive(
         ),
         "TAR" | "TAR.GZ" | "TAR.BZ2" | "TAR.XZ" | "TAR.ZST" => tar::create_tar(
             sources,
+            output_path,
             &part_path,
             format_str,
             level,
@@ -284,6 +300,7 @@ pub fn create_archive(
         ),
         "RAR" => rar::create_rar(
             sources,
+            output_path,
             &part_path,
             level,
             password,

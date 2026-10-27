@@ -8,21 +8,8 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicI64, Ordering as AtomicOrdering};
 use walkdir::WalkDir;
 
-use super::BUFFER_SIZE;
+use super::{BUFFER_SIZE, CountingReader};
 use super::format::{ArchiveEntryData, Format, normalize_entry_path};
-
-struct CountingReader<R> {
-    inner: R,
-    bytes_read: Arc<AtomicI64>,
-}
-
-impl<R: Read> Read for CountingReader<R> {
-    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-        let n = self.inner.read(buf)?;
-        self.bytes_read.fetch_add(n as i64, AtomicOrdering::Relaxed);
-        Ok(n)
-    }
-}
 
 pub(crate) fn list_tar(
     archive_path: &Path,
@@ -172,8 +159,18 @@ pub(crate) fn extract_tar(
     Ok(extracted_count)
 }
 
+struct TempFileGuard<'a>(&'a Path, bool);
+impl<'a> Drop for TempFileGuard<'a> {
+    fn drop(&mut self) {
+        if !self.1 {
+            let _ = fs::remove_file(self.0);
+        }
+    }
+}
+
 pub(crate) fn create_tar(
     sources: &[PathBuf],
+    output_path: &Path,
     part_path: &Path,
     format_str: &str,
     level: i32,
@@ -183,6 +180,7 @@ pub(crate) fn create_tar(
 ) -> Result<i64, Box<dyn std::error::Error + Send + Sync>> {
     if format_str.to_ascii_uppercase().as_str() == "TAR.XZ" {
         let tar_temp_path = part_path.with_extension("tar.tmp");
+        let tar_guard = TempFileGuard(&tar_temp_path, false);
         let tar_file = File::create(&tar_temp_path)?;
         let writer = BufWriter::with_capacity(BUFFER_SIZE, tar_file);
         let mut tar = tar::Builder::new(writer);
@@ -195,15 +193,17 @@ pub(crate) fn create_tar(
                 if !cancel_token.is_null()
                     && unsafe { (*cancel_token).load(AtomicOrdering::Relaxed) }
                 {
-                    let _ = fs::remove_file(&tar_temp_path);
                     return Err("Operation cancelled".into());
                 }
 
                 let entry = entry?;
-                let rel = entry
-                    .path()
+                let entry_path = entry.path();
+                if entry_path == part_path || entry_path == output_path || entry_path == tar_temp_path {
+                    continue;
+                }
+                let rel = entry_path
                     .strip_prefix(root_parent)
-                    .unwrap_or(entry.path());
+                    .unwrap_or(entry_path);
 
                 if entry.file_type().is_dir() {
                     tar.append_dir(rel, entry.path())?;
@@ -227,7 +227,6 @@ pub(crate) fn create_tar(
                     tar.append_data(&mut header, rel, &mut reader)?;
                     written_bytes += meta.len() as i64;
                     if on_progress(written_bytes, total_bytes, &name).is_err() {
-                        let _ = fs::remove_file(&tar_temp_path);
                         return Err("Operation cancelled".into());
                     }
                 }
@@ -246,7 +245,8 @@ pub(crate) fn create_tar(
         std::io::copy(&mut tar_reader, &mut xz_writer)?;
         let mut w = xz_writer.finish()?;
         w.flush()?;
-        let _ = fs::remove_file(&tar_temp_path);
+        drop(tar_reader);
+        drop(tar_guard);
         return Ok(written_bytes);
     }
 
@@ -257,7 +257,7 @@ pub(crate) fn create_tar(
         "TAR" => {
             let mut tar = tar::Builder::new(writer);
             let written =
-                write_tar_entries(&mut tar, sources, total_bytes, cancel_token, on_progress)?;
+                write_tar_entries(&mut tar, sources, output_path, part_path, total_bytes, cancel_token, on_progress)?;
             let mut w = tar.into_inner()?;
             w.flush()?;
             Ok(written)
@@ -271,7 +271,7 @@ pub(crate) fn create_tar(
             let enc = GzEncoder::new(writer, comp);
             let mut tar = tar::Builder::new(enc);
             let written =
-                write_tar_entries(&mut tar, sources, total_bytes, cancel_token, on_progress)?;
+                write_tar_entries(&mut tar, sources, output_path, part_path, total_bytes, cancel_token, on_progress)?;
             let enc = tar.into_inner()?;
             let mut w = enc.finish()?;
             w.flush()?;
@@ -284,7 +284,7 @@ pub(crate) fn create_tar(
             );
             let mut tar = tar::Builder::new(enc);
             let written =
-                write_tar_entries(&mut tar, sources, total_bytes, cancel_token, on_progress)?;
+                write_tar_entries(&mut tar, sources, output_path, part_path, total_bytes, cancel_token, on_progress)?;
             let enc = tar.into_inner()?;
             let mut w = enc.finish()?;
             w.flush()?;
@@ -294,7 +294,7 @@ pub(crate) fn create_tar(
             let enc = zstd::Encoder::new(writer, level.clamp(1, 9))?;
             let mut tar = tar::Builder::new(enc);
             let written =
-                write_tar_entries(&mut tar, sources, total_bytes, cancel_token, on_progress)?;
+                write_tar_entries(&mut tar, sources, output_path, part_path, total_bytes, cancel_token, on_progress)?;
             let enc = tar.into_inner()?;
             let mut w = enc.finish()?;
             w.flush()?;
@@ -307,6 +307,8 @@ pub(crate) fn create_tar(
 fn write_tar_entries<W: Write>(
     tar: &mut tar::Builder<W>,
     sources: &[PathBuf],
+    output_path: &Path,
+    part_path: &Path,
     total_bytes: i64,
     cancel_token: *const AtomicBool,
     on_progress: &mut impl FnMut(i64, i64, &str) -> Result<(), ()>,
@@ -321,10 +323,13 @@ fn write_tar_entries<W: Write>(
             }
 
             let entry = entry?;
-            let rel = entry
-                .path()
+            let entry_path = entry.path();
+            if entry_path == part_path || entry_path == output_path {
+                continue;
+            }
+            let rel = entry_path
                 .strip_prefix(root_parent)
-                .unwrap_or(entry.path());
+                .unwrap_or(entry_path);
 
             if entry.file_type().is_dir() {
                 tar.append_dir(rel, entry.path())?;

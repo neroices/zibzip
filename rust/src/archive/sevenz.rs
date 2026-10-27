@@ -168,6 +168,7 @@ pub(crate) fn extract_sevenz(
 
 pub(crate) fn create_sevenz(
     sources: &[PathBuf],
+    output_path: &Path,
     part_path: &Path,
     total_bytes: i64,
     cancel_token: *const AtomicBool,
@@ -185,10 +186,13 @@ pub(crate) fn create_sevenz(
             }
 
             let entry = entry?;
-            let rel = entry
-                .path()
+            let entry_path = entry.path();
+            if entry_path == part_path || entry_path == output_path {
+                continue;
+            }
+            let rel = entry_path
                 .strip_prefix(root_parent)
-                .unwrap_or(entry.path());
+                .unwrap_or(entry_path);
             let rel_str = rel.to_string_lossy().replace('\\', "/");
             if rel_str.is_empty() {
                 continue;

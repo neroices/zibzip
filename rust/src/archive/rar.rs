@@ -134,6 +134,7 @@ pub(crate) fn extract_rar(
 pub(crate) fn create_rar(
     sources: &[PathBuf],
     output_path: &Path,
+    part_path: &Path,
     level: i32,
     password: Option<&str>,
     total_bytes: i64,
@@ -168,7 +169,7 @@ pub(crate) fn create_rar(
             }
             let entry = entry?;
             let path = entry.path();
-            if path == output_path {
+            if path == output_path || path == part_path {
                 continue;
             }
             let rel = path.strip_prefix(parent).unwrap_or(path);
@@ -308,7 +309,7 @@ pub(crate) fn create_rar(
         on_progress: std::sync::Mutex::new(on_progress),
     };
 
-    let write_res = builder.write_to_path(output_path, Some(&progress_reporter));
+    let write_res = builder.write_to_path(part_path, Some(&progress_reporter));
 
     if progress_reporter
         .cancelled_by_cb
@@ -320,7 +321,7 @@ pub(crate) fn create_rar(
 
     match write_res {
         Ok(_) => {
-            let out_meta = fs::metadata(output_path)?;
+            let out_meta = fs::metadata(part_path)?;
             Ok(out_meta.len() as i64)
         }
         Err(e) => {

@@ -4,9 +4,10 @@ use flate2::write::GzEncoder;
 use std::fs::{self, File};
 use std::io::{BufReader, BufWriter, Read, Write};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering as AtomicOrdering};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicI64, Ordering as AtomicOrdering};
 
-use super::BUFFER_SIZE;
+use super::{BUFFER_SIZE, CountingReader};
 use super::format::{Format, strip_format_suffix};
 
 pub(crate) fn extract_single(
@@ -21,12 +22,17 @@ pub(crate) fn extract_single(
     let file = File::open(archive_path)?;
     let total_bytes = file.metadata()?.len() as i64;
     let reader = BufReader::with_capacity(BUFFER_SIZE, file);
+    let bytes_read = Arc::new(AtomicI64::new(0));
+    let counting = CountingReader {
+        inner: reader,
+        bytes_read: bytes_read.clone(),
+    };
 
     let mut stream: Box<dyn Read> = match format {
-        Format::Gz => Box::new(GzDecoder::new(reader)),
-        Format::Bz2 => Box::new(bzip2::read::BzDecoder::new(reader)),
-        Format::Xz => Box::new(lzma_rust2::XzReader::new(reader, true)),
-        Format::Zst => Box::new(zstd::Decoder::new(reader)?),
+        Format::Gz => Box::new(GzDecoder::new(counting)),
+        Format::Bz2 => Box::new(bzip2::read::BzDecoder::new(counting)),
+        Format::Xz => Box::new(lzma_rust2::XzReader::new(counting, true)),
+        Format::Zst => Box::new(zstd::Decoder::new(counting)?),
         _ => return Err("Not a single-file format".into()),
     };
 
@@ -48,7 +54,6 @@ pub(crate) fn extract_single(
 
     let mut writer = BufWriter::with_capacity(BUFFER_SIZE, File::create(&target)?);
     let mut buf = vec![0u8; BUFFER_SIZE];
-    let mut done_bytes = 0i64;
 
     loop {
         if !cancel_token.is_null() && unsafe { (*cancel_token).load(AtomicOrdering::Relaxed) } {
@@ -61,10 +66,14 @@ pub(crate) fn extract_single(
             break;
         }
         writer.write_all(&buf[..n])?;
-        done_bytes += n as i64;
-        let _ = on_progress(done_bytes, total_bytes, name);
+        let current_done = bytes_read.load(AtomicOrdering::Relaxed).min(total_bytes);
+        if on_progress(current_done, total_bytes, name).is_err() {
+            let _ = fs::remove_file(&target);
+            return Err("Operation cancelled".into());
+        }
     }
     writer.flush()?;
+    let _ = on_progress(total_bytes, total_bytes, name);
     Ok(1)
 }
 
