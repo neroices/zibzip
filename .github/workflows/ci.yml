@@ -75,6 +75,9 @@ jobs:
       - name: Run Unit Tests
         run: ./gradlew test --no-daemon
 
+      - name: Run Detekt
+        run: ./gradlew detekt --no-daemon
+
       - name: Upload Debug APK
         if: success()
         uses: actions/upload-artifact@v7
