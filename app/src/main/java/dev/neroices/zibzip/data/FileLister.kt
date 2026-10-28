@@ -79,11 +79,7 @@ class FileLister {
                     !it.path.contains("/${TrashManager.TRASH_DIR_NAME}/") &&
                     accept(it.name, it.isDirectory)
             }
-            val chunkSize = 40
-            for (chunk in filtered.chunked(chunkSize)) {
-                currentCoroutineContext().ensureActive()
-                emit(chunk)
-            }
+            emit(filtered)
         } finally {
             cancelHandle?.dispose()
             NativeArchiveBridge.nativeFreeCancelToken(cancelToken)
