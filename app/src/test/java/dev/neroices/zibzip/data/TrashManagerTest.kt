@@ -217,5 +217,23 @@ class TrashManagerTest {
         trashManager.restore(item)
         Unit
     }
+
+    @Test
+    fun getTrashStats_returnsCorrectCountAndBytes() = runBlocking {
+        assertEquals(TrashStats(0, 0L), trashManager.getTrashStats())
+
+        val f1 = tmp.newFile("file1.txt").apply { writeText("hello") }
+        val f2 = tmp.newFile("file2.txt").apply { writeText("world!") }
+        trashManager.moveToTrash(listOf(f1, f2))
+
+        val stats = trashManager.getTrashStats()
+        assertEquals(2, stats.count)
+        assertEquals(11L, stats.totalBytes)
+
+        trashManager.emptyTrash()
+        val statsAfterEmpty = trashManager.getTrashStats()
+        assertEquals(0, statsAfterEmpty.count)
+        assertEquals(0L, statsAfterEmpty.totalBytes)
+    }
 }
 

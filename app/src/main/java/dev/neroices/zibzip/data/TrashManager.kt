@@ -45,11 +45,15 @@ class TrashManager(
         fileOps = fileOps,
     )
 
+    @Volatile
+    private var cachedStats: TrashStats? = null
+
     companion object {
         const val TRASH_DIR_NAME = ".zibzip_trash"
         const val NOMEDIA_FILE_NAME = ".nomedia"
         const val FILES_DIR_NAME = "files"
         const val INFO_DIR_NAME = "info"
+        private val SIZE_REGEX = Regex("\"size\":\\s*(\\d+)")
     }
 
     /** Returns all valid trash directories across all mounted storage roots. */
@@ -154,19 +158,21 @@ class TrashManager(
                 }
             }
 
-            // 3. Fallback: Copy directly into trashFile, then delete original
+            // 3. Fallback: Copy via native streaming, rename to id, then delete original
             if (!success) {
                 try {
-                    val copied = if (isDir) {
-                        file.copyRecursively(trashFile, overwrite = true)
-                    } else {
-                        file.copyTo(trashFile, overwrite = true).exists()
-                    }
-                    if (copied && trashFile.exists()) {
-                        file.deleteRecursively()
-                        success = true
-                    } else {
-                        trashFile.deleteRecursively()
+                    val copied = fileOps.copy(listOf(file), filesDir, progress)
+                    val copiedFile = copied.firstOrNull()
+                    if (copiedFile != null && copiedFile.exists()) {
+                        if (copiedFile != trashFile) {
+                            copiedFile.renameTo(trashFile)
+                        }
+                        if (trashFile.exists()) {
+                            fileOps.delete(listOf(file), progress)
+                            success = true
+                        } else {
+                            fileOps.delete(listOf(copiedFile), ProgressListener.None)
+                        }
                     }
                 } catch (_: Throwable) {
                     success = false
@@ -176,6 +182,7 @@ class TrashManager(
 
             // Only record metadata if the move or copy succeeded
             if (success) {
+                cachedStats = null
                 val metadata = TrashedItem(
                     id = id,
                     originalPath = originalPath,
@@ -287,6 +294,8 @@ class TrashManager(
                 }
             }
         }
+        val stats = TrashStats(count = list.size, totalBytes = list.sumOf { it.size })
+        cachedStats = stats
         list.sortedByDescending { it.deletedAt }
     }
 
@@ -316,19 +325,24 @@ class TrashManager(
         }
         if (!restored) {
             try {
-                if (item.trashFile.isDirectory) {
-                    item.trashFile.copyRecursively(target, overwrite = false)
-                } else {
-                    item.trashFile.copyTo(target, overwrite = false)
-                }
-                if (target.exists()) {
-                    item.trashFile.deleteRecursively()
-                    restored = true
+                val copied = fileOps.copy(listOf(item.trashFile), parent, ProgressListener.None)
+                val copiedFile = copied.firstOrNull()
+                if (copiedFile != null && copiedFile.exists()) {
+                    if (copiedFile != target) {
+                        copiedFile.renameTo(target)
+                    }
+                    if (target.exists()) {
+                        fileOps.delete(listOf(item.trashFile), ProgressListener.None)
+                        restored = true
+                    } else {
+                        fileOps.delete(listOf(copiedFile), ProgressListener.None)
+                    }
                 }
             } catch (_: Throwable) {
             }
         }
         if (restored) {
+            cachedStats = null
             item.infoFile.delete()
             target
         } else {
@@ -345,6 +359,7 @@ class TrashManager(
         }
         val isGone = deleted || !item.trashFile.exists()
         if (isGone) {
+            cachedStats = null
             item.infoFile.delete()
         }
         isGone
@@ -352,6 +367,7 @@ class TrashManager(
 
     /** Empties all trash directories across all volumes. */
     suspend fun emptyTrash(): Int = withContext(Dispatchers.IO) {
+        cachedStats = null
         var count = 0
         for (td in getAllTrashDirs()) {
             val filesDir = File(td, FILES_DIR_NAME)
@@ -372,11 +388,44 @@ class TrashManager(
 
     /** Returns count of items and total size across all trash folders. */
     suspend fun getTrashStats(): TrashStats = withContext(Dispatchers.IO) {
-        val items = listTrash()
-        TrashStats(
-            count = items.size,
-            totalBytes = items.sumOf { it.size },
-        )
+        cachedStats?.let { return@withContext it }
+        var totalCount = 0
+        var totalBytes = 0L
+
+        for (td in getAllTrashDirs()) {
+            val filesDir = File(td, FILES_DIR_NAME)
+            val infoDir = File(td, INFO_DIR_NAME)
+            if (!infoDir.exists() && !filesDir.exists()) continue
+
+            val infoFiles = infoDir.listFiles { _, name -> name.endsWith(".json") } ?: emptyArray()
+            val seenIds = HashSet<String>(infoFiles.size)
+
+            for (infoFile in infoFiles) {
+                val id = infoFile.nameWithoutExtension
+                val trashFile = File(filesDir, id)
+                if (trashFile.exists()) {
+                    seenIds.add(id)
+                    totalCount++
+                    val text = runCatching { infoFile.readText() }.getOrNull() ?: ""
+                    val sizeMatch = SIZE_REGEX.find(text)
+                    val size = sizeMatch?.groupValues?.get(1)?.toLongOrNull() ?: 0L
+                    totalBytes += if (size > 0) size else trashFile.length()
+                }
+            }
+
+            val orphaned = filesDir.listFiles()?.filter { it.name !in seenIds } ?: emptyList()
+            for (f in orphaned) {
+                totalCount++
+                totalBytes += if (f.isDirectory) {
+                    runCatching { f.walkTopDown().filter { it.isFile }.sumOf { it.length() } }.getOrDefault(0L)
+                } else {
+                    f.length()
+                }
+            }
+        }
+        val stats = TrashStats(count = totalCount, totalBytes = totalBytes)
+        cachedStats = stats
+        stats
     }
 
     private fun serializeMetadata(item: TrashedItem): String {
