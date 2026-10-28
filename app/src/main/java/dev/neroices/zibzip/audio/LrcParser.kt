@@ -12,6 +12,7 @@ data class LyricLine(
 object LrcParser {
 
     private val timeTagRegex = Regex("""\[(\d{1,2}):(\d{1,2})(?:[.:](\d{1,3}))?\]""")
+    private const val MAX_LRC_SIZE = 512 * 1024L // 512 KB
 
     fun parse(content: String): List<LyricLine> {
         val lines = content.lines()
@@ -69,7 +70,7 @@ object LrcParser {
                 }
             } ?: return emptyList()
 
-            if (!lrcFile.canRead()) return emptyList()
+            if (!lrcFile.canRead() || lrcFile.length() > MAX_LRC_SIZE) return emptyList()
             val content = readTextSafely(lrcFile)
             parse(content)
         } catch (_: Throwable) {
@@ -78,6 +79,7 @@ object LrcParser {
     }
 
     private fun readTextSafely(file: File): String {
+        if (file.length() > MAX_LRC_SIZE) return ""
         return try {
             val bytes = file.readBytes()
             if (bytes.size >= 3 && bytes[0] == 0xEF.toByte() && bytes[1] == 0xBB.toByte() && bytes[2] == 0xBF.toByte()) {

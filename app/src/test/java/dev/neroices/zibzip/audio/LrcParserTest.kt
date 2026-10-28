@@ -67,4 +67,20 @@ class LrcParserTest {
         """.trimIndent()
         assertTrue(LrcParser.parse(onlyHeaders).isEmpty())
     }
+
+    @Test
+    fun loadLyrics_rejectsOversizedFile() {
+        val tempFolder = java.io.File(System.getProperty("java.io.tmpdir"), "lrc_test_${System.nanoTime()}").apply { mkdirs() }
+        val audio = java.io.File(tempFolder, "song.mp3").apply { writeBytes(byteArrayOf(1, 2, 3)) }
+        val oversizedLrc = java.io.File(tempFolder, "song.lrc")
+        val writer = oversizedLrc.bufferedWriter()
+        val chunk = "[00:01.00] Line text padding\n".repeat(20_000)
+        writer.write(chunk)
+        writer.flush()
+        writer.close()
+
+        val result = LrcParser.findAndParseForAudio(audio.absolutePath)
+        assertTrue(result.isEmpty())
+        tempFolder.deleteRecursively()
+    }
 }
