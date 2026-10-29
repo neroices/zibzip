@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -100,6 +101,7 @@ fun ZibzipRoot() {
     val density = LocalDensity.current
     var floatingChromeHeightPx by remember { mutableIntStateOf(0) }
     val hasTasks = runningTasks.isNotEmpty()
+
     val fallbackChromeHeight = 80.dp + (if (isAudioActive) 130.dp else 0.dp) + (if (hasTasks) 64.dp else 0.dp)
     val effectiveChromeHeight = if (floatingChromeHeightPx > 0) with(density) { floatingChromeHeightPx.toDp() } else fallbackChromeHeight
     val targetClearance = effectiveChromeHeight + 76.dp
@@ -252,6 +254,7 @@ fun ZibzipRoot() {
                     .navigationBarsPadding()
                     .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
                     .padding(horizontal = 16.dp, vertical = 12.dp)
+                    .widthIn(max = 500.dp)
                     .onSizeChanged { floatingChromeHeightPx = it.height },
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(10.dp),

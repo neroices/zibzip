@@ -4,10 +4,12 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -16,8 +18,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -47,6 +52,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -71,7 +77,6 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material3.CircularProgressIndicator
@@ -136,68 +141,95 @@ fun FilesScreen(
 
     val clearance = LocalFloatingBarClearance.current
     val fabBottomOffset by animateDpAsState(
-        targetValue = clearance - 58.dp,
+        targetValue = (clearance - 58.dp).coerceAtLeast(16.dp),
         label = "fabBottomOffset",
     )
 
-    Box(modifier.fillMaxSize()) {
+    BoxWithConstraints(modifier.fillMaxSize()) {
+        val isWide = maxWidth >= 600.dp || (maxWidth > maxHeight && maxWidth >= 500.dp)
+
         Column(Modifier.fillMaxSize().statusBarsPadding()) {
             FilesTopBar(
                 ui = ui,
                 count = items.size,
                 settings = settings,
                 vm = vm,
-                onOpenStorageSheet = { showStorageSheet = true },
+                onOpenStorageSheet = { if (!isWide) showStorageSheet = true },
             )
-            Box(Modifier.weight(1f).fillMaxWidth()) {
-                val path = ui.path
-                if (path == null) {
-                    LaunchedEffect(Unit) {
-                        vm.open(context.zibzipApp.storage.primaryRoot.path)
-                    }
-                } else {
-                    FileList(
-                        items = items,
-                        ui = ui,
-                        settings = settings,
-                        canNavigateUp = vm.canNavigateUp(),
-                        onNavigateUp = { vm.navigateUp() },
-                        onClick = { item ->
-                            when {
-                                ui.selection.isNotEmpty() -> vm.toggleSelection(item.path)
-                                item.isDirectory -> vm.open(item.path)
-                                item.kind == FileKind.Apk || item.name.endsWith(".apk", ignoreCase = true) -> context.installApk(item.path)
-                                item.kind == FileKind.Archive -> onOpenArchive(item.path)
-                                item.name.endsWith(".pdf", ignoreCase = true) -> onOpenPdf(item.path)
-                                item.kind == FileKind.Image -> {
-                                    val imagePaths = items.filter { it.kind == FileKind.Image && !it.isDirectory }.map { it.path }
-                                    val initialIndex = imagePaths.indexOf(item.path).coerceAtLeast(0)
-                                    onOpenImage(imagePaths, initialIndex)
-                                }
-                                item.kind == FileKind.Video || FileTypes.isVideoFile(item.name) -> {
-                                    onOpenVideo(item.path)
-                                }
-                                item.kind == FileKind.Audio || FileTypes.isAudioFile(item.name) -> {
-                                    val audioPaths = items
-                                        .filter { !it.isDirectory && (it.kind == FileKind.Audio || FileTypes.isAudioFile(it.name)) }
-                                        .map { it.path }
-                                    context.zibzipApp.audioPlayer.playFile(item.path, audioPaths)
-                                }
-                                item.kind == FileKind.Code || FileTypes.isTextFile(item.name) || FileTypes.isTextFile(java.io.File(item.path)) -> {
-                                    onOpenText(item.path, false)
-                                }
-                                else -> context.openFile(item.path)
-                            }
-                        },
-                        onLongClick = { item -> vm.toggleSelection(item.path) },
-                        onRetry = { vm.refresh(silent = false) },
-                        onRefresh = { vm.refresh(silent = false) },
-                    )
-                    if (ui.loading || ui.searchRunning) {
-                        LinearProgressIndicator(
-                            modifier = Modifier.fillMaxWidth(),
-                            color = MaterialTheme.colorScheme.primary,
+            Row(Modifier.weight(1f).fillMaxWidth()) {
+                if (isWide) {
+                    Surface(
+                        modifier = Modifier
+                            .width(260.dp)
+                            .fillMaxHeight(),
+                        color = MaterialTheme.colorScheme.surfaceContainerLow,
+                    ) {
+                        StorageNavigationContent(
+                            volumes = ui.volumes,
+                            useTrash = settings.useTrash,
+                            onOpen = { targetPath -> vm.open(targetPath) },
+                            onOpenTrash = { vm.showDialog(FileDialog.Trash) },
+                            includeBottomClearance = true,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 14.dp, vertical = 8.dp),
                         )
+                    }
+                    VerticalDivider(
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
+                    )
+                }
+
+                Box(Modifier.weight(1f).fillMaxHeight()) {
+                    val path = ui.path
+                    if (path == null) {
+                        LaunchedEffect(Unit) {
+                            vm.open(context.zibzipApp.storage.primaryRoot.path)
+                        }
+                    } else {
+                        FileList(
+                            items = items,
+                            ui = ui,
+                            settings = settings,
+                            canNavigateUp = vm.canNavigateUp(),
+                            onNavigateUp = { vm.navigateUp() },
+                            onClick = { item ->
+                                when {
+                                    ui.selection.isNotEmpty() -> vm.toggleSelection(item.path)
+                                    item.isDirectory -> vm.open(item.path)
+                                    item.kind == FileKind.Apk || item.name.endsWith(".apk", ignoreCase = true) -> context.installApk(item.path)
+                                    item.kind == FileKind.Archive -> onOpenArchive(item.path)
+                                    item.name.endsWith(".pdf", ignoreCase = true) -> onOpenPdf(item.path)
+                                    item.kind == FileKind.Image -> {
+                                        val imagePaths = items.filter { it.kind == FileKind.Image && !it.isDirectory }.map { it.path }
+                                        val initialIndex = imagePaths.indexOf(item.path).coerceAtLeast(0)
+                                        onOpenImage(imagePaths, initialIndex)
+                                    }
+                                    item.kind == FileKind.Video || FileTypes.isVideoFile(item.name) -> {
+                                        onOpenVideo(item.path)
+                                    }
+                                    item.kind == FileKind.Audio || FileTypes.isAudioFile(item.name) -> {
+                                        val audioPaths = items
+                                            .filter { !it.isDirectory && (it.kind == FileKind.Audio || FileTypes.isAudioFile(it.name)) }
+                                            .map { it.path }
+                                        context.zibzipApp.audioPlayer.playFile(item.path, audioPaths)
+                                    }
+                                    item.kind == FileKind.Code || FileTypes.isTextFile(item.name) || FileTypes.isTextFile(java.io.File(item.path)) -> {
+                                        onOpenText(item.path, false)
+                                    }
+                                    else -> context.openFile(item.path)
+                                }
+                            },
+                            onLongClick = { item -> vm.toggleSelection(item.path) },
+                            onRetry = { vm.refresh(silent = false) },
+                            onRefresh = { vm.refresh(silent = false) },
+                        )
+                        if (ui.loading || ui.searchRunning) {
+                            LinearProgressIndicator(
+                                modifier = Modifier.fillMaxWidth(),
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                        }
                     }
                 }
             }
@@ -213,7 +245,7 @@ fun FilesScreen(
                     .padding(end = 16.dp, bottom = fabBottomOffset),
             )
         }
-        if (showStorageSheet) {
+        if (showStorageSheet && !isWide) {
             StorageBottomSheet(
                 volumes = ui.volumes,
                 useTrash = settings.useTrash,
@@ -697,11 +729,11 @@ private fun FileList(
         label = "pullOffset",
     )
 
-    val lazyListState = rememberLazyListState()
+    val lazyGridState = rememberLazyGridState()
 
     val isAtTop by remember {
         derivedStateOf {
-            lazyListState.firstVisibleItemIndex == 0 && lazyListState.firstVisibleItemScrollOffset == 0
+            lazyGridState.firstVisibleItemIndex == 0 && lazyGridState.firstVisibleItemScrollOffset == 0
         }
     }
 
@@ -798,15 +830,17 @@ private fun FileList(
                 else -> {
                     val base = ui.path.orEmpty()
                     key(ui.path) {
-                        LazyColumn(
-                            state = lazyListState,
+                        LazyVerticalGrid(
+                            columns = GridCells.Adaptive(minSize = 340.dp),
+                            state = lazyGridState,
                             modifier = Modifier
                                 .fillMaxSize()
-                                .mouseDragScroll(lazyListState),
+                                .mouseDragScroll(lazyGridState),
                             contentPadding = PaddingValues(top = 2.dp, bottom = LocalFloatingBarClearance.current),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             if (showNavigateUp) {
-                                item(key = "..", contentType = "parent_dir") {
+                                item(key = "..", span = { GridItemSpan(maxLineSpan) }, contentType = "parent_dir") {
                                     FileRow(
                                         title = "..",
                                         subtitle = "Parent folder",
@@ -819,7 +853,7 @@ private fun FileList(
                                 }
                             }
                             if (items.isEmpty()) {
-                                item(key = "__empty__") {
+                                item(key = "__empty__", span = { GridItemSpan(maxLineSpan) }) {
                                     Box(
                                         modifier = Modifier
                                             .fillMaxWidth()

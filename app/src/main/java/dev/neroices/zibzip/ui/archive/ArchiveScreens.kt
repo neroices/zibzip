@@ -1,5 +1,6 @@
 package dev.neroices.zibzip.ui.archive
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -10,9 +11,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
@@ -68,7 +71,7 @@ import dev.neroices.zibzip.ui.files.LocalFloatingBarClearance
 fun ArchivesScreen(vm: ArchivesViewModel, modifier: Modifier = Modifier) {
     val state by vm.list.collectAsStateWithLifecycle()
     val cs = MaterialTheme.colorScheme
-    val listState = rememberLazyListState()
+    val gridState = rememberLazyGridState()
     LaunchedEffect(Unit) { vm.scan() }
 
     Column(modifier.fillMaxSize().statusBarsPadding()) {
@@ -105,12 +108,14 @@ fun ArchivesScreen(vm: ArchivesViewModel, modifier: Modifier = Modifier) {
                     message = "ZIP, 7z, TAR, GZ, RAR and more show up here.",
                 )
 
-                else -> LazyColumn(
-                    state = listState,
+                else -> LazyVerticalGrid(
+                    columns = GridCells.Adaptive(minSize = 340.dp),
+                    state = gridState,
                     modifier = Modifier
                         .fillMaxSize()
-                        .mouseDragScroll(listState),
+                        .mouseDragScroll(gridState),
                     contentPadding = PaddingValues(top = 2.dp, bottom = LocalFloatingBarClearance.current),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     items(
                         items = state.items,
@@ -155,7 +160,7 @@ fun ArchiveViewerScreen(
     val clipboard by vm.clipboard.collectAsStateWithLifecycle()
     val settings by vm.settings.collectAsStateWithLifecycle()
     val cs = MaterialTheme.colorScheme
-    val listState = rememberLazyListState()
+    val gridState = rememberLazyGridState()
 
     Surface(modifier.fillMaxSize(), color = cs.surface) {
         Column(Modifier.fillMaxSize().statusBarsPadding()) {
@@ -179,15 +184,17 @@ fun ArchiveViewerScreen(
                         if (state.visible.isEmpty() && !showNavigateUp) {
                             EmptyState(Icons.Rounded.FolderZip, "This folder is empty")
                         } else {
-                            LazyColumn(
-                                state = listState,
+                            LazyVerticalGrid(
+                                columns = GridCells.Adaptive(minSize = 340.dp),
+                                state = gridState,
                                 modifier = Modifier
                                     .fillMaxSize()
-                                    .mouseDragScroll(listState),
+                                    .mouseDragScroll(gridState),
                                 contentPadding = PaddingValues(top = 2.dp, bottom = LocalFloatingBarClearance.current),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
                             ) {
                                 if (showNavigateUp) {
-                                    item(key = "..", contentType = "parent_dir") {
+                                    item(key = "..", span = { GridItemSpan(maxLineSpan) }, contentType = "parent_dir") {
                                         FileRow(
                                             title = "..",
                                             subtitle = "Parent folder",
@@ -200,7 +207,7 @@ fun ArchiveViewerScreen(
                                     }
                                 }
                                 if (state.visible.isEmpty()) {
-                                    item(key = "__empty__") {
+                                    item(key = "__empty__", span = { GridItemSpan(maxLineSpan) }) {
                                         Box(
                                             modifier = Modifier
                                                 .fillMaxWidth()

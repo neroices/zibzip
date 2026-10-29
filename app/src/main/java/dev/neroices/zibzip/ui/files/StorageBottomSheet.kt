@@ -74,147 +74,169 @@ fun StorageBottomSheet(
     onDismiss: () -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    val context = LocalContext.current
-    val primary = remember { context.zibzipApp.storage.primaryRoot }
-    val cs = MaterialTheme.colorScheme
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
         sheetMaxWidth = 440.dp,
         shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
-        containerColor = cs.surfaceContainer,
+        containerColor = MaterialTheme.colorScheme.surfaceContainer,
         dragHandle = { BottomSheetDefaults.DragHandle() },
     ) {
-        val scrollState = rememberScrollState()
-        Column(
+        StorageNavigationContent(
+            volumes = volumes,
+            useTrash = useTrash,
+            onOpen = onOpen,
+            onOpenTrash = onOpenTrash,
             modifier = Modifier
                 .fillMaxWidth()
                 .widthIn(max = 440.dp)
-                .verticalScroll(scrollState)
-                .mouseDragScroll(scrollState)
                 .padding(horizontal = 18.dp)
                 .padding(bottom = 28.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            // Storage volume cards
-            volumes.forEach { volume ->
-                VolumeCard(volume = volume) {
-                    onOpen(volume.path)
-                }
+        )
+    }
+}
+
+@Composable
+fun StorageNavigationContent(
+    volumes: List<StorageVolumeInfo>,
+    useTrash: Boolean = false,
+    onOpen: (String) -> Unit,
+    onOpenTrash: () -> Unit = {},
+    includeBottomClearance: Boolean = false,
+    modifier: Modifier = Modifier,
+) {
+    val context = LocalContext.current
+    val primary = remember { context.zibzipApp.storage.primaryRoot }
+    val cs = MaterialTheme.colorScheme
+    val scrollState = rememberScrollState()
+
+    Column(
+        modifier = modifier
+            .verticalScroll(scrollState)
+            .mouseDragScroll(scrollState),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        // Storage volume cards
+        volumes.forEach { volume ->
+            VolumeCard(volume = volume) {
+                onOpen(volume.path)
             }
+        }
 
-            if (useTrash) {
-                var trashStats by remember { mutableStateOf<TrashStats?>(null) }
-                LaunchedEffect(Unit) {
-                    trashStats = context.zibzipApp.trash.getTrashStats()
-                }
-
-                Surface(
-                    onClick = onOpenTrash,
-                    shape = RoundedCornerShape(20.dp),
-                    color = cs.surfaceContainerHigh,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 14.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Surface(
-                            shape = CircleShape,
-                            color = cs.primaryContainer,
-                            modifier = Modifier.size(40.dp),
-                        ) {
-                            Icon(
-                                imageVector = Icons.Outlined.Delete,
-                                contentDescription = null,
-                                tint = cs.onPrimaryContainer,
-                                modifier = Modifier
-                                    .padding(9.dp)
-                                    .fillMaxSize(),
-                            )
-                        }
-                        Spacer(Modifier.width(14.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(
-                                text = "Trash",
-                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-                                color = cs.onSurface,
-                            )
-                            Text(
-                                text = when {
-                                    trashStats == null -> "Restore or permanently delete items"
-                                    trashStats!!.count == 0 -> "Empty"
-                                    else -> {
-                                        val count = trashStats!!.count
-                                        val unit = if (count == 1) "item" else "items"
-                                        val bytes = formatSize(trashStats!!.totalBytes)
-                                        "$count $unit · $bytes"
-                                    }
-                                },
-                                style = MaterialTheme.typography.bodySmall,
-                                color = cs.onSurfaceVariant,
-                            )
-                        }
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
-                            contentDescription = null,
-                            tint = cs.onSurfaceVariant.copy(alpha = 0.5f),
-                            modifier = Modifier.size(20.dp),
-                        )
-                    }
-                }
-            }
-
-            // Quick shortcuts header
-            Text(
-                text = "Quick shortcuts",
-                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
-                color = cs.primary,
-                modifier = Modifier.padding(start = 2.dp, top = 4.dp),
-            )
-
-            val shortcuts = remember {
-                listOf(
-                    StorageShortcut("Download", "Download", Icons.Outlined.Download),
-                    StorageShortcut("Camera", "DCIM", Icons.Outlined.PhotoCamera),
-                    StorageShortcut("Pictures", "Pictures", Icons.Outlined.Image),
-                    StorageShortcut("Documents", "Documents", Icons.Outlined.Description),
-                    StorageShortcut("Music", "Music", Icons.Outlined.MusicNote),
-                    StorageShortcut("Movies", "Movies", Icons.Outlined.Movie),
-                )
+        if (useTrash) {
+            var trashStats by remember { mutableStateOf<TrashStats?>(null) }
+            LaunchedEffect(Unit) {
+                trashStats = context.zibzipApp.trash.getTrashStats()
             }
 
             Surface(
+                onClick = onOpenTrash,
                 shape = RoundedCornerShape(20.dp),
                 color = cs.surfaceContainerHigh,
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Column(
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 4.dp),
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    shortcuts.forEachIndexed { index, shortcut ->
-                        val targetDir = remember(primary, shortcut.folderName) {
-                            File(primary, shortcut.folderName).path
-                        }
-                        ShortcutRow(
-                            title = shortcut.title,
-                            icon = shortcut.icon,
-                            onClick = { onOpen(targetDir) },
+                    Surface(
+                        shape = CircleShape,
+                        color = cs.primaryContainer,
+                        modifier = Modifier.size(40.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Delete,
+                            contentDescription = null,
+                            tint = cs.onPrimaryContainer,
+                            modifier = Modifier
+                                .padding(9.dp)
+                                .fillMaxSize(),
                         )
-                        if (index < shortcuts.lastIndex) {
-                            HorizontalDivider(
-                                color = cs.outlineVariant.copy(alpha = 0.25f),
-                                modifier = Modifier.padding(horizontal = 16.dp),
-                            )
-                        }
+                    }
+                    Spacer(Modifier.width(14.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            text = "Trash",
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                            color = cs.onSurface,
+                        )
+                        Text(
+                            text = when {
+                                trashStats == null -> "Restore or permanently delete items"
+                                trashStats!!.count == 0 -> "Empty"
+                                else -> {
+                                    val count = trashStats!!.count
+                                    val unit = if (count == 1) "item" else "items"
+                                    val bytes = formatSize(trashStats!!.totalBytes)
+                                    "$count $unit · $bytes"
+                                }
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = cs.onSurfaceVariant,
+                        )
+                    }
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
+                        contentDescription = null,
+                        tint = cs.onSurfaceVariant.copy(alpha = 0.5f),
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
+            }
+        }
+
+        // Quick shortcuts header
+        Text(
+            text = "Quick shortcuts",
+            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+            color = cs.primary,
+            modifier = Modifier.padding(start = 2.dp, top = 4.dp),
+        )
+
+        val shortcuts = remember {
+            listOf(
+                StorageShortcut("Download", "Download", Icons.Outlined.Download),
+                StorageShortcut("Camera", "DCIM", Icons.Outlined.PhotoCamera),
+                StorageShortcut("Pictures", "Pictures", Icons.Outlined.Image),
+                StorageShortcut("Documents", "Documents", Icons.Outlined.Description),
+                StorageShortcut("Music", "Music", Icons.Outlined.MusicNote),
+                StorageShortcut("Movies", "Movies", Icons.Outlined.Movie),
+            )
+        }
+
+        Surface(
+            shape = RoundedCornerShape(20.dp),
+            color = cs.surfaceContainerHigh,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp),
+            ) {
+                shortcuts.forEachIndexed { index, shortcut ->
+                    val targetDir = remember(primary, shortcut.folderName) {
+                        File(primary, shortcut.folderName).path
+                    }
+                    ShortcutRow(
+                        title = shortcut.title,
+                        icon = shortcut.icon,
+                        onClick = { onOpen(targetDir) },
+                    )
+                    if (index < shortcuts.lastIndex) {
+                        HorizontalDivider(
+                            color = cs.outlineVariant.copy(alpha = 0.25f),
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                        )
                     }
                 }
             }
+        }
+        if (includeBottomClearance) {
+            Spacer(Modifier.height(LocalFloatingBarClearance.current))
         }
     }
 }
