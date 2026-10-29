@@ -138,7 +138,10 @@ pub fn list_directory(
     let mut items = Vec::with_capacity(128);
 
     for entry in read_dir {
-        let entry = entry?;
+        let entry = match entry {
+            Ok(e) => e,
+            Err(_) => continue,
+        };
         let file_name = entry.file_name();
         let name_str = file_name.to_string_lossy();
         let is_hidden = name_str.starts_with('.');
@@ -147,15 +150,32 @@ pub fn list_directory(
             continue;
         }
 
-        let metadata = entry.metadata()?;
-        let is_dir = metadata.is_dir();
-        let size = if is_dir { 0 } else { metadata.len() as i64 };
-        let modified = metadata
-            .modified()
-            .ok()
-            .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
-            .map(|d| d.as_millis() as i64)
-            .unwrap_or(0);
+        let (is_dir, size, modified) = match entry.metadata() {
+            Ok(metadata) => {
+                let is_dir = metadata.is_dir();
+                let size = if is_dir { 0 } else { metadata.len() as i64 };
+                let modified = metadata
+                    .modified()
+                    .ok()
+                    .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+                    .map(|d| d.as_millis() as i64)
+                    .unwrap_or(0);
+                (is_dir, size, modified)
+            }
+            Err(_) => {
+                if let Ok(symlink_meta) = fs::symlink_metadata(entry.path()) {
+                    let modified = symlink_meta
+                        .modified()
+                        .ok()
+                        .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+                        .map(|d| d.as_millis() as i64)
+                        .unwrap_or(0);
+                    (false, 0, modified)
+                } else {
+                    continue;
+                }
+            }
+        };
 
         items.push(DirEntryItem {
             path: entry.path().to_string_lossy().into_owned(),
@@ -323,7 +343,7 @@ pub fn folder_stats(
 
 fn unique_child_path(dest_dir: &Path, name: &std::ffi::OsStr) -> PathBuf {
     let base = dest_dir.join(name);
-    if !base.exists() {
+    if base.symlink_metadata().is_err() {
         return base;
     }
     let name_str = name.to_string_lossy();
@@ -343,7 +363,7 @@ fn unique_child_path(dest_dir: &Path, name: &std::ffi::OsStr) -> PathBuf {
     };
     for i in 1..10000 {
         let candidate = dest_dir.join(format!("{} ({}){}", stem, i, ext));
-        if !candidate.exists() {
+        if candidate.symlink_metadata().is_err() {
             return candidate;
         }
     }
@@ -398,6 +418,15 @@ pub fn copy_files(
 
                 if entry.file_type().is_dir() {
                     fs::create_dir_all(&target_path)?;
+                } else if entry.file_type().is_symlink() {
+                    if let Some(parent) = target_path.parent() {
+                        fs::create_dir_all(parent)?;
+                    }
+                    #[cfg(unix)]
+                    if let Ok(link_dest) = fs::read_link(entry.path()) {
+                        let _ = fs::remove_file(&target_path);
+                        let _ = std::os::unix::fs::symlink(&link_dest, &target_path);
+                    }
                 } else if entry.file_type().is_file() {
                     if let Some(parent) = target_path.parent() {
                         fs::create_dir_all(parent)?;
@@ -476,17 +505,43 @@ pub fn delete_files(
 ) -> Result<i64, std::io::Error> {
     let mut total_items = 0i64;
     for p in paths {
-        for _ in WalkDir::new(p) {
-            total_items += 1;
+        if let Ok(meta) = p.symlink_metadata() {
+            if meta.file_type().is_symlink() {
+                total_items += 1;
+            } else {
+                for _ in WalkDir::new(p) {
+                    total_items += 1;
+                }
+            }
         }
     }
 
     let mut deleted = 0i64;
     for p in paths {
-        if !p.exists() {
-            continue;
-        }
-        if p.is_dir() {
+        let meta = match p.symlink_metadata() {
+            Ok(m) => m,
+            Err(_) => continue,
+        };
+        if meta.file_type().is_symlink() {
+            if !cancel_token.is_null() && unsafe { (*cancel_token).load(AtomicOrdering::Relaxed) } {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::Interrupted,
+                    "Operation cancelled",
+                ));
+            }
+            let name = p
+                .file_name()
+                .map(|n| n.to_string_lossy())
+                .unwrap_or_default();
+            fs::remove_file(p)?;
+            deleted += 1;
+            if on_progress(deleted, total_items, &name).is_err() {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::Interrupted,
+                    "Operation cancelled",
+                ));
+            }
+        } else if meta.is_dir() {
             for entry in WalkDir::new(p).contents_first(true) {
                 if !cancel_token.is_null()
                     && unsafe { (*cancel_token).load(AtomicOrdering::Relaxed) }
@@ -538,4 +593,130 @@ pub fn delete_files(
     }
 
     Ok(deleted)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    #[cfg(unix)]
+    fn test_copy_files_preserves_symlinks() {
+        let temp_dir = std::env::temp_dir().join(format!(
+            "zibzip_test_copy_symlink_{}",
+            std::time::SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let src_dir = temp_dir.join("src");
+        fs::create_dir_all(&src_dir).unwrap();
+        let target_file = src_dir.join("real.txt");
+        fs::write(&target_file, b"content").unwrap();
+        let symlink_path = src_dir.join("link.txt");
+        std::os::unix::fs::symlink("real.txt", &symlink_path).unwrap();
+
+        let dest_dir = temp_dir.join("dest");
+        fs::create_dir_all(&dest_dir).unwrap();
+
+        let res = copy_files(
+            &[src_dir],
+            &dest_dir,
+            std::ptr::null(),
+            |_, _, _| Ok(()),
+        );
+        assert!(res.is_ok());
+
+        let copied_link = dest_dir.join("src/link.txt");
+        let meta = fs::symlink_metadata(&copied_link).expect("symlink should exist at dest");
+        assert!(meta.file_type().is_symlink());
+        assert_eq!(fs::read_link(&copied_link).unwrap(), PathBuf::from("real.txt"));
+
+        let _ = fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn test_list_directory_with_broken_symlink() {
+        let temp_dir = std::env::temp_dir().join(format!(
+            "zibzip_test_list_symlink_{}",
+            std::time::SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir_all(&temp_dir).unwrap();
+        let broken_link = temp_dir.join("broken.txt");
+        std::os::unix::fs::symlink("nonexistent_target.txt", &broken_link).unwrap();
+
+        let entries = list_directory(&temp_dir, true, 0, true, true)
+            .expect("list_directory should succeed in presence of broken symlinks");
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].name, "broken.txt");
+        assert!(!entries[0].is_directory);
+
+        let _ = fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn test_unique_child_path_with_broken_symlink() {
+        let temp_dir = std::env::temp_dir().join(format!(
+            "zibzip_test_unique_symlink_{}",
+            std::time::SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir_all(&temp_dir).unwrap();
+        let broken_link = temp_dir.join("report.txt");
+        std::os::unix::fs::symlink("missing.txt", &broken_link).unwrap();
+
+        let unique = unique_child_path(&temp_dir, std::ffi::OsStr::new("report.txt"));
+        assert_eq!(unique, temp_dir.join("report (1).txt"));
+
+        let _ = fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn test_delete_files_removes_broken_symlink_and_preserves_target_dir() {
+        let temp_dir = std::env::temp_dir().join(format!(
+            "zibzip_test_delete_symlink_{}",
+            std::time::SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir_all(&temp_dir).unwrap();
+
+        // 1. Broken symlink deletion
+        let broken_link = temp_dir.join("broken.txt");
+        std::os::unix::fs::symlink("missing.txt", &broken_link).unwrap();
+        assert!(broken_link.symlink_metadata().is_ok());
+
+        let deleted = delete_files(&[broken_link.clone()], std::ptr::null(), |_, _, _| Ok(()))
+            .expect("delete_files should succeed for broken symlink");
+        assert_eq!(deleted, 1);
+        assert!(broken_link.symlink_metadata().is_err());
+
+        // 2. Symlink to directory: delete symlink should not delete target directory contents
+        let real_dir = temp_dir.join("real_dir");
+        fs::create_dir_all(&real_dir).unwrap();
+        let target_file = real_dir.join("inner.txt");
+        fs::write(&target_file, b"keep me").unwrap();
+
+        let dir_symlink = temp_dir.join("dir_link");
+        std::os::unix::fs::symlink(&real_dir, &dir_symlink).unwrap();
+        assert!(dir_symlink.symlink_metadata().is_ok());
+
+        let deleted_link = delete_files(&[dir_symlink.clone()], std::ptr::null(), |_, _, _| Ok(()))
+            .expect("delete_files should delete directory symlink");
+        assert_eq!(deleted_link, 1);
+        assert!(dir_symlink.symlink_metadata().is_err());
+        assert!(target_file.exists(), "Target file in real_dir must not be deleted");
+        assert_eq!(fs::read(&target_file).unwrap(), b"keep me");
+
+        let _ = fs::remove_dir_all(&temp_dir);
+    }
 }
