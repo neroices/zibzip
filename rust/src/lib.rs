@@ -36,6 +36,29 @@ fn throw_io_exception(env: &mut Env, msg: impl AsRef<str>) {
     );
 }
 
+use std::panic::{catch_unwind, AssertUnwindSafe};
+
+fn catch_panic<T, F, E>(f: F) -> Result<T, String>
+where
+    F: FnOnce() -> Result<T, E>,
+    E: std::fmt::Display,
+{
+    match catch_unwind(AssertUnwindSafe(f)) {
+        Ok(Ok(val)) => Ok(val),
+        Ok(Err(err)) => Err(err.to_string()),
+        Err(err) => {
+            let msg = if let Some(s) = err.downcast_ref::<&str>() {
+                (*s).to_string()
+            } else if let Some(s) = err.downcast_ref::<String>() {
+                s.clone()
+            } else {
+                "Native operation panicked".to_string()
+            };
+            Err(format!("Native panic: {}", msg))
+        }
+    }
+}
+
 fn throw_generic_exception(env: &mut Env, msg: impl AsRef<str>) {
     let _ = env.throw_new(
         jni_str!("java/lang/Exception"),
@@ -50,6 +73,9 @@ pub extern "system" fn Java_dev_neroices_zibzip_data_NativeArchiveBridge_nativeC
 ) -> jlong {
     let id = NEXT_TOKEN_ID.fetch_add(1, AtomicOrdering::Relaxed);
     if let Ok(mut reg) = token_registry().lock() {
+        if reg.len() > 32 {
+            reg.retain(|_, arc| Arc::strong_count(arc) > 1);
+        }
         reg.insert(id, Arc::new(AtomicBool::new(false)));
     }
     id
@@ -96,16 +122,18 @@ pub extern "system" fn Java_dev_neroices_zibzip_data_NativeArchiveBridge_nativeL
             Err(_) => return Ok(std::ptr::null_mut()),
         };
 
-        let items = match file_ops::list_directory(
-            Path::new(&dir_path_str),
-            show_hidden != JNI_FALSE,
-            sort_field,
-            ascending != JNI_FALSE,
-            folders_first != JNI_FALSE,
-        ) {
+        let items = match catch_panic(|| {
+            file_ops::list_directory(
+                Path::new(&dir_path_str),
+                show_hidden != JNI_FALSE,
+                sort_field,
+                ascending != JNI_FALSE,
+                folders_first != JNI_FALSE,
+            )
+        }) {
             Ok(it) => it,
             Err(e) => {
-                throw_io_exception(env, e.to_string());
+                throw_io_exception(env, e);
                 return Ok(std::ptr::null_mut());
             }
         };
@@ -146,14 +174,16 @@ pub extern "system" fn Java_dev_neroices_zibzip_data_NativeArchiveBridge_nativeS
             .map(|a| a as *const AtomicBool)
             .unwrap_or(std::ptr::null());
 
-        let items = match file_ops::search_files(
-            Path::new(&root_str),
-            &query_str,
-            &exts,
-            show_hidden != JNI_FALSE,
-            limit.max(1) as usize,
-            cancel_ptr,
-        ) {
+        let items = match catch_panic(|| {
+            file_ops::search_files(
+                Path::new(&root_str),
+                &query_str,
+                &exts,
+                show_hidden != JNI_FALSE,
+                limit.max(1) as usize,
+                cancel_ptr,
+            )
+        }) {
             Ok(it) => it,
             Err(e) => {
                 let msg = e.to_string();
@@ -197,10 +227,10 @@ pub extern "system" fn Java_dev_neroices_zibzip_data_NativeArchiveBridge_nativeL
             None
         };
 
-        let entries = match archive::list_entries(Path::new(&archive_path_str), pw_str.as_deref()) {
+        let entries = match catch_panic(|| archive::list_entries(Path::new(&archive_path_str), pw_str.as_deref())) {
             Ok(e) => e,
             Err(err) => {
-                throw_generic_exception(env, err.to_string());
+                throw_generic_exception(env, err);
                 return Ok(std::ptr::null_mut());
             }
         };
@@ -317,16 +347,18 @@ pub extern "system" fn Java_dev_neroices_zibzip_data_NativeArchiveBridge_nativeE
         };
         let mut tracker = JniProgressTracker::new(env, &progress_listener);
 
-        let res = archive::extract_archive(
-            Path::new(&archive_str),
-            Path::new(&dest_str),
-            sel_vec.as_deref(),
-            &base_str,
-            pw_str.as_deref(),
-            conflict_policy,
-            cancel_ptr,
-            |done, total, cur| tracker.report(done, total, cur, false),
-        );
+        let res = catch_panic(|| {
+            archive::extract_archive(
+                Path::new(&archive_str),
+                Path::new(&dest_str),
+                sel_vec.as_deref(),
+                &base_str,
+                pw_str.as_deref(),
+                conflict_policy,
+                cancel_ptr,
+                |done, total, cur| tracker.report(done, total, cur, false),
+            )
+        });
 
         if res.is_ok() && !is_token_cancelled() {
             let _ = tracker.flush();
@@ -396,15 +428,17 @@ pub extern "system" fn Java_dev_neroices_zibzip_data_NativeArchiveBridge_nativeC
         };
         let mut tracker = JniProgressTracker::new(env, &progress_listener);
 
-        let res = archive::create_archive(
-            &sources,
-            Path::new(&out_str),
-            &fmt_str,
-            level,
-            pw_str.as_deref(),
-            cancel_ptr,
-            |done, total, cur| tracker.report(done, total, cur, false),
-        );
+        let res = catch_panic(|| {
+            archive::create_archive(
+                &sources,
+                Path::new(&out_str),
+                &fmt_str,
+                level,
+                pw_str.as_deref(),
+                cancel_ptr,
+                |done, total, cur| tracker.report(done, total, cur, false),
+            )
+        });
 
         if res.is_ok() && !is_token_cancelled() {
             let _ = tracker.flush();
@@ -462,12 +496,14 @@ pub extern "system" fn Java_dev_neroices_zibzip_data_NativeArchiveBridge_nativeR
         };
         let mut tracker = JniProgressTracker::new(env, &progress_listener);
 
-        let res = archive::remove_zip_entries(
-            Path::new(&archive_str),
-            &to_remove,
-            cancel_ptr,
-            |done, total, cur| tracker.report(done, total, cur, false),
-        );
+        let res = catch_panic(|| {
+            archive::remove_zip_entries(
+                Path::new(&archive_str),
+                &to_remove,
+                cancel_ptr,
+                |done, total, cur| tracker.report(done, total, cur, false),
+            )
+        });
 
         if res.is_ok() && !is_token_cancelled() {
             let _ = tracker.flush();
@@ -537,15 +573,17 @@ pub extern "system" fn Java_dev_neroices_zibzip_data_NativeArchiveBridge_nativeA
         };
         let mut tracker = JniProgressTracker::new(env, &progress_listener);
 
-        let res = archive::add_zip_entries(
-            Path::new(&archive_str),
-            &inner_str,
-            &sources,
-            level,
-            pw_str.as_deref(),
-            cancel_ptr,
-            |done, total, cur| tracker.report(done, total, cur, false),
-        );
+        let res = catch_panic(|| {
+            archive::add_zip_entries(
+                Path::new(&archive_str),
+                &inner_str,
+                &sources,
+                level,
+                pw_str.as_deref(),
+                cancel_ptr,
+                |done, total, cur| tracker.report(done, total, cur, false),
+            )
+        });
 
         if res.is_ok() && !is_token_cancelled() {
             let _ = tracker.flush();
@@ -601,12 +639,14 @@ pub extern "system" fn Java_dev_neroices_zibzip_data_NativeArchiveBridge_nativeC
         };
         let mut tracker = JniProgressTracker::new(env, &progress_listener);
 
-        let res = file_ops::copy_files(
-            &sources,
-            Path::new(&dest_str),
-            cancel_ptr,
-            |done, total, cur| tracker.report(done, total, cur, false),
-        );
+        let res = catch_panic(|| {
+            file_ops::copy_files(
+                &sources,
+                Path::new(&dest_str),
+                cancel_ptr,
+                |done, total, cur| tracker.report(done, total, cur, false),
+            )
+        });
 
         if res.is_ok() && !is_token_cancelled() {
             let _ = tracker.flush();
@@ -661,8 +701,10 @@ pub extern "system" fn Java_dev_neroices_zibzip_data_NativeArchiveBridge_nativeD
         };
         let mut tracker = JniProgressTracker::new(env, &progress_listener);
 
-        let res = file_ops::delete_files(&path_list, cancel_ptr, |done, total, cur| {
-            tracker.report(done, total, cur, false)
+        let res = catch_panic(|| {
+            file_ops::delete_files(&path_list, cancel_ptr, |done, total, cur| {
+                tracker.report(done, total, cur, false)
+            })
         });
 
         if res.is_ok() && !is_token_cancelled() {
@@ -713,7 +755,7 @@ pub extern "system" fn Java_dev_neroices_zibzip_data_NativeArchiveBridge_nativeF
             .map(|a| a as *const AtomicBool)
             .unwrap_or(std::ptr::null());
 
-        let stats = match file_ops::folder_stats(Path::new(&dir_str), cancel_ptr) {
+        let stats = match catch_panic(|| file_ops::folder_stats(Path::new(&dir_str), cancel_ptr)) {
             Ok(s) => s,
             Err(e) => {
                 let msg = e.to_string();
