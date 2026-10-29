@@ -16,13 +16,9 @@ val gitCommitCount: Int = runCatching {
 }.getOrElse { 1 }
 
 val gitHash: String = runCatching {
-    val hash = providers.exec {
+    providers.exec {
         commandLine("git", "rev-parse", "--short=7", "HEAD")
     }.standardOutput.asText.get().trim()
-    val status = providers.exec {
-        commandLine("git", "status", "--porcelain")
-    }.standardOutput.asText.get().trim()
-    if (status.isNotEmpty()) "$hash-dirty" else hash
 }.getOrElse { "unknown" }
 
 android {
