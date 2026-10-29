@@ -1,6 +1,5 @@
 package dev.neroices.zibzip.domain
 
-import androidx.annotation.Keep
 import androidx.compose.runtime.Immutable
 import java.io.File
 
@@ -106,7 +105,6 @@ object FileTypes {
     }
 }
 
-@Keep
 @Immutable
 data class FileItem(
     val path: String,
@@ -201,7 +199,6 @@ data class StorageVolumeInfo(
 )
 
 /** One entry inside an archive, as reported by the archive's own index. */
-@Keep
 @Immutable
 data class ArchiveEntryItem(
     val path: String,

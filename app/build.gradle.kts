@@ -118,6 +118,11 @@ android {
                 "META-INF/INDEX.LIST",
             )
         }
+        jniLibs {
+            excludes += setOf(
+                "**/libsevenz_rust2*.so",
+            )
+        }
     }
 
     splits {
@@ -240,9 +245,9 @@ tasks.withType<Test>().configureEach {
     dependsOn("cargoBuildHost")
 }
 
-// Hook into Android's build process so the native libs are always compiled
+// Hook into Android's build process so the native libs are compiled when assembling APKs
 tasks.configureEach {
-    if (name == "preBuild" || name == "mergeDebugJniLibFolders" || name == "mergeReleaseJniLibFolders") {
+    if (name == "mergeDebugJniLibFolders" || name == "mergeReleaseJniLibFolders") {
         dependsOn("cargoNdkBuild")
     }
 }

@@ -1,11 +1,9 @@
 package dev.neroices.zibzip.data
 
-import androidx.annotation.Keep
 import dev.neroices.zibzip.domain.ArchiveEntryItem
 import dev.neroices.zibzip.domain.FileItem
 import java.io.File
 
-@Keep
 fun interface NativeProgressListener {
     fun onProgress(done: Long, total: Long, current: String)
 }

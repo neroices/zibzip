@@ -756,13 +756,19 @@ impl<'a, 'b> JniProgressTracker<'a, 'b> {
     fn new(env: &'b mut Env<'a>, listener: &'b JObject<'a>) -> Self {
         let method_id = if !listener.is_null() {
             if let Ok(class) = env.get_object_class(listener) {
-                env.get_method_id(
+                let mid = env.get_method_id(
                     &class,
                     jni_str!("onProgress"),
                     jni_sig!("(JJLjava/lang/String;)V"),
-                )
-                .ok()
+                );
+                if env.exception_check() {
+                    env.exception_clear();
+                }
+                mid.ok()
             } else {
+                if env.exception_check() {
+                    env.exception_clear();
+                }
                 None
             }
         } else {
