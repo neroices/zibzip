@@ -26,10 +26,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.outlined.Description
+import androidx.compose.material.icons.outlined.FileDownload
 import androidx.compose.material.icons.outlined.Restore
+import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.Warning
 import androidx.compose.material.icons.rounded.Archive
+import androidx.compose.material.icons.rounded.BugReport
 import androidx.compose.material.icons.rounded.CreateNewFolder
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.DeleteForever
@@ -68,7 +72,9 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -79,6 +85,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import dev.neroices.zibzip.R
 import dev.neroices.zibzip.data.FolderStats
 import dev.neroices.zibzip.domain.ArchiveFormat
 import dev.neroices.zibzip.domain.ConflictPolicy
@@ -583,4 +590,171 @@ fun DetailsDialog(
         onDismiss = onDismiss,
         calculateSha256 = calculateSha256,
     )
+}
+
+@Composable
+fun CrashReportDialog(
+    report: String,
+    onDismiss: () -> Unit,
+    onCopy: () -> Unit,
+    onSaveToFile: () -> Unit,
+    onShare: () -> Unit,
+    onReportOnGithub: () -> Unit,
+) {
+    val cs = MaterialTheme.colorScheme
+    val preview = remember(report) {
+        val crashIndex = report.indexOf("--------- crash")
+        if (crashIndex != -1) {
+            report.substring(crashIndex).lines().take(12).joinToString("\n")
+        } else {
+            report.lines().take(12).joinToString("\n")
+        }.ifBlank { report.take(500) }
+    }
+
+    PopupDialogContainer(
+        onDismiss = onDismiss,
+        icon = Icons.Rounded.BugReport,
+        iconContainerColor = cs.errorContainer,
+        iconContentColor = cs.error,
+        title = "Crash Detected",
+        subtitle = "zibzip crashed in the previous session",
+        confirmLabel = "Copy Report",
+        cancelLabel = "Dismiss",
+        onConfirm = onCopy,
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Text(
+                text = "An unexpected error occurred during your last session. You can copy or export this report to help fix it on GitHub.",
+                style = MaterialTheme.typography.bodySmall,
+                color = cs.onSurfaceVariant,
+            )
+
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = cs.surfaceContainerLowest,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 140.dp),
+            ) {
+                Text(
+                    text = preview,
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 11.sp,
+                        lineHeight = 15.sp,
+                    ),
+                    color = cs.onSurface,
+                    modifier = Modifier
+                        .padding(10.dp)
+                        .verticalScroll(rememberScrollState()),
+                )
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = cs.surfaceContainerHighest,
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(14.dp))
+                        .clickable { onSaveToFile() },
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.FileDownload,
+                            contentDescription = null,
+                            tint = cs.onSurface,
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Text(
+                            text = "Save to File",
+                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                            color = cs.onSurface,
+                        )
+                    }
+                }
+
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = cs.surfaceContainerHighest,
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(14.dp))
+                        .clickable { onShare() },
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Share,
+                            contentDescription = null,
+                            tint = cs.onSurface,
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Text(
+                            text = "Share",
+                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                            color = cs.onSurface,
+                        )
+                    }
+                }
+            }
+
+            Surface(
+                shape = RoundedCornerShape(14.dp),
+                color = cs.surfaceContainerHighest,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .clickable { onReportOnGithub() },
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_github),
+                            contentDescription = null,
+                            tint = cs.onSurface,
+                            modifier = Modifier.size(20.dp),
+                        )
+                        Text(
+                            text = "Report on GitHub",
+                            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+                            color = cs.onSurface,
+                        )
+                    }
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Outlined.OpenInNew,
+                        contentDescription = null,
+                        tint = cs.onSurfaceVariant,
+                        modifier = Modifier.size(16.dp),
+                    )
+                }
+            }
+        }
+    }
 }

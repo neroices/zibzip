@@ -7,6 +7,7 @@ import android.net.Uri
 import android.provider.Settings
 import android.webkit.MimeTypeMap
 import androidx.core.content.FileProvider
+import dev.neroices.zibzip.data.CrashReportManager
 import dev.neroices.zibzip.domain.FileTypes
 import dev.neroices.zibzip.zibzipApp
 import java.io.File
@@ -105,6 +106,25 @@ fun Context.shareFiles(paths: List<String>) {
         zibzipApp.toast("No app available to share with")
     } catch (e: IllegalArgumentException) {
         zibzipApp.toast("These files can't be shared")
+    }
+}
+
+fun Context.shareTextFile(content: String, filename: String = CrashReportManager.getLogFileName()) {
+    try {
+        val file = File(cacheDir, filename)
+        file.writeText(content)
+        val uri = uriFor(file)
+        val intent = Intent(Intent.ACTION_SEND)
+            .setType("text/plain")
+            .putExtra(Intent.EXTRA_STREAM, uri)
+            .putExtra(Intent.EXTRA_TEXT, content)
+            .putExtra(Intent.EXTRA_SUBJECT, filename)
+            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        startActivity(Intent.createChooser(intent, null).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    } catch (e: ActivityNotFoundException) {
+        zibzipApp.toast("No app available to share log file")
+    } catch (e: IllegalArgumentException) {
+        zibzipApp.toast("Log file cannot be shared")
     }
 }
 

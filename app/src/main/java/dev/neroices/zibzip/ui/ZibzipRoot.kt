@@ -1,6 +1,8 @@
 package dev.neroices.zibzip.ui
 
 import android.Manifest
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.pm.PackageManager
 import android.os.Build
 import android.app.Activity
@@ -42,6 +44,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -51,6 +54,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
+import dev.neroices.zibzip.data.CrashReportManager
 import dev.neroices.zibzip.data.OpResult
 import dev.neroices.zibzip.domain.OpState
 import dev.neroices.zibzip.zibzipApp
@@ -59,6 +63,7 @@ import dev.neroices.zibzip.ui.archive.ArchivesScreen
 import dev.neroices.zibzip.ui.archive.ArchivesViewModel
 import dev.neroices.zibzip.ui.archive.ViewerDialog
 import dev.neroices.zibzip.ui.components.ArchiveSelectionBar
+import dev.neroices.zibzip.ui.components.CrashReportDialog
 import dev.neroices.zibzip.ui.components.FloatingNavBar
 import dev.neroices.zibzip.ui.components.OperationCard
 import dev.neroices.zibzip.ui.components.OperationsContainer
@@ -131,8 +136,32 @@ fun ZibzipRoot() {
     var videoPlayerArgs by remember { mutableStateOf<VideoPlayerArgs?>(null) }
     var textEditorArgs by remember { mutableStateOf<TextEditorArgs?>(null) }
     var pdfViewerArgs by remember { mutableStateOf<PdfViewerArgs?>(null) }
+    var pendingCrashReport by remember { mutableStateOf<String?>(null) }
+    val uriHandler = LocalUriHandler.current
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+
+    val saveCrashLogLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("text/plain")
+    ) { uri ->
+        val report = pendingCrashReport
+        if (uri != null && report != null) {
+            runCatching {
+                context.contentResolver.openOutputStream(uri)?.use { os ->
+                    os.write(report.toByteArray(Charsets.UTF_8))
+                }
+                app.toast("Crash log saved successfully")
+                CrashReportManager.clearPendingCrashReport(context)
+                pendingCrashReport = null
+            }.onFailure {
+                app.toast("Failed to save crash log")
+            }
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        pendingCrashReport = CrashReportManager.getPendingCrashReport(context)
+    }
 
     // Back from the system "All files access" page (or any other app) lands here.
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { filesVm.onResume() }
@@ -332,6 +361,37 @@ fun ZibzipRoot() {
                     onClose = { pdfViewerArgs = null },
                 )
             }
+        }
+
+        pendingCrashReport?.let { report ->
+            CrashReportDialog(
+                report = report,
+                onDismiss = {
+                    CrashReportManager.clearPendingCrashReport(context)
+                    pendingCrashReport = null
+                },
+                onCopy = {
+                    val clipboard = context.getSystemService(ClipboardManager::class.java)
+                    clipboard?.setPrimaryClip(ClipData.newPlainText("zibzip Crash Report", report))
+                    app.toast("Crash report copied to clipboard")
+                    CrashReportManager.clearPendingCrashReport(context)
+                    pendingCrashReport = null
+                },
+                onSaveToFile = {
+                    saveCrashLogLauncher.launch(CrashReportManager.getLogFileName())
+                },
+                onShare = {
+                    context.shareTextFile(report, CrashReportManager.getLogFileName())
+                },
+                onReportOnGithub = {
+                    val clipboard = context.getSystemService(ClipboardManager::class.java)
+                    clipboard?.setPrimaryClip(ClipData.newPlainText("zibzip Crash Report", report))
+                    app.toast("Crash report copied to clipboard")
+                    runCatching { uriHandler.openUri("https://github.com/neroices/zibzip/issues/new") }
+                    CrashReportManager.clearPendingCrashReport(context)
+                    pendingCrashReport = null
+                },
+            )
         }
     }
 }

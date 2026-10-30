@@ -3,6 +3,7 @@ package dev.neroices.zibzip
 import android.app.Application
 import android.content.Context
 import dev.neroices.zibzip.data.ArchiveManager
+import dev.neroices.zibzip.data.CrashReportManager
 import dev.neroices.zibzip.data.FileLister
 import dev.neroices.zibzip.data.FileOperations
 import dev.neroices.zibzip.data.OperationRunner
@@ -55,6 +56,7 @@ class ZibzipApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        CrashReportManager.init(this)
         // Files extracted only to be opened externally live in the cache; drop leftovers from last run.
         appScope.launch(Dispatchers.IO) { File(cacheDir, OPEN_CACHE_DIR).deleteRecursively() }
         // Run a foreground service for as long as any operation is active.

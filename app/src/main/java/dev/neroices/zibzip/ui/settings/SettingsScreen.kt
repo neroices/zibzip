@@ -2,7 +2,10 @@ package dev.neroices.zibzip.ui.settings
 
 import android.os.Build
 import dev.neroices.zibzip.BuildConfig
+import dev.neroices.zibzip.data.CrashReportManager
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -31,16 +34,19 @@ import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.automirrored.outlined.Sort
+import androidx.compose.material.icons.outlined.BugReport
 import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.DeleteSweep
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.DriveFolderUpload
+import androidx.compose.material.icons.outlined.FileDownload
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.FolderZip
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.Palette
+import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -81,6 +87,7 @@ import dev.neroices.zibzip.domain.SortField
 import dev.neroices.zibzip.ui.components.ConfirmDialog
 import dev.neroices.zibzip.ui.files.FloatingBarClearance
 import dev.neroices.zibzip.ui.files.LocalFloatingBarClearance
+import dev.neroices.zibzip.ui.shareTextFile
 import dev.neroices.zibzip.zibzipApp
 import kotlinx.coroutines.launch
 
@@ -208,6 +215,7 @@ enum class SettingsSubpage {
     Main,
     About,
     Libraries,
+    Diagnostics,
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -222,6 +230,7 @@ fun SettingsScreen(
     BackHandler(enabled = subpage != SettingsSubpage.Main) {
         subpage = when (subpage) {
             SettingsSubpage.Libraries -> SettingsSubpage.About
+            SettingsSubpage.Diagnostics -> SettingsSubpage.About
             SettingsSubpage.About -> SettingsSubpage.Main
             SettingsSubpage.Main -> SettingsSubpage.Main
         }
@@ -253,9 +262,14 @@ fun SettingsScreen(
             SettingsSubpage.About -> AboutDeveloperPage(
                 onBack = { subpage = SettingsSubpage.Main },
                 onNavigateToLibraries = { subpage = SettingsSubpage.Libraries },
+                onNavigateToDiagnostics = { subpage = SettingsSubpage.Diagnostics },
             )
 
             SettingsSubpage.Libraries -> OpenSourceLibrariesPage(
+                onBack = { subpage = SettingsSubpage.About },
+            )
+
+            SettingsSubpage.Diagnostics -> DiagnosticsPage(
                 onBack = { subpage = SettingsSubpage.About },
             )
         }
@@ -537,6 +551,7 @@ private fun MainSettingsPage(
 private fun AboutDeveloperPage(
     onBack: () -> Unit,
     onNavigateToLibraries: () -> Unit,
+    onNavigateToDiagnostics: () -> Unit,
 ) {
     val uriHandler = LocalUriHandler.current
     val cs = MaterialTheme.colorScheme
@@ -805,6 +820,220 @@ private fun AboutDeveloperPage(
                     contentDescription = null,
                     tint = cs.onSurfaceVariant,
                     modifier = Modifier.size(20.dp),
+                )
+            }
+        }
+
+        // Diagnostics Section
+        SectionHeader(icon = Icons.Outlined.BugReport, title = "Diagnostics")
+        SettingsCard {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onNavigateToDiagnostics() }
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.BugReport,
+                    contentDescription = null,
+                    tint = cs.onSurfaceVariant,
+                    modifier = Modifier.size(24.dp),
+                )
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(horizontal = 14.dp),
+                ) {
+                    Text(
+                        text = "Diagnostics & logs",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = cs.onSurface,
+                    )
+                    Text(
+                        text = "Save logs, share diagnostics, or report issues",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = cs.onSurfaceVariant,
+                    )
+                }
+                Icon(
+                    imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
+                    contentDescription = null,
+                    tint = cs.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+        }
+
+        Spacer(Modifier.height(LocalFloatingBarClearance.current))
+    }
+}
+
+@Composable
+private fun DiagnosticsPage(
+    onBack: () -> Unit,
+) {
+    val context = LocalContext.current
+    val uriHandler = LocalUriHandler.current
+    val cs = MaterialTheme.colorScheme
+
+    val saveLogLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("text/plain")
+    ) { uri ->
+        if (uri != null) {
+            val report = CrashReportManager.buildFullDiagnosticReport()
+            runCatching {
+                context.contentResolver.openOutputStream(uri)?.use { os ->
+                    os.write(report.toByteArray(Charsets.UTF_8))
+                }
+                context.zibzipApp.toast("Log saved successfully")
+            }.onFailure {
+                context.zibzipApp.toast("Failed to save log file")
+            }
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .statusBarsPadding()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        // Top Navigation Bar
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 8.dp),
+        ) {
+            IconButton(onClick = onBack) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
+                    contentDescription = "Back",
+                    tint = cs.onSurface,
+                )
+            }
+            Text(
+                text = "Diagnostics",
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                color = cs.onSurface,
+                modifier = Modifier.padding(start = 4.dp),
+            )
+        }
+
+        SectionHeader(icon = Icons.Outlined.BugReport, title = "Logs")
+        SettingsCard {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { saveLogLauncher.launch(CrashReportManager.getLogFileName()) }
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.FileDownload,
+                    contentDescription = null,
+                    tint = cs.onSurfaceVariant,
+                    modifier = Modifier.size(24.dp),
+                )
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(horizontal = 14.dp),
+                ) {
+                    Text(
+                        text = "Save log to file",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = cs.onSurface,
+                    )
+                    Text(
+                        text = "Choose folder to save ${CrashReportManager.getLogFileName()}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = cs.onSurfaceVariant,
+                    )
+                }
+            }
+
+            CardDivider()
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable {
+                        val report = CrashReportManager.buildFullDiagnosticReport()
+                        context.shareTextFile(report, CrashReportManager.getLogFileName())
+                    }
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Share,
+                    contentDescription = null,
+                    tint = cs.onSurfaceVariant,
+                    modifier = Modifier.size(24.dp),
+                )
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(horizontal = 14.dp),
+                ) {
+                    Text(
+                        text = "Share log",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = cs.onSurface,
+                    )
+                    Text(
+                        text = "Send log to other apps or nearby devices",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = cs.onSurfaceVariant,
+                    )
+                }
+                Icon(
+                    imageVector = Icons.AutoMirrored.Outlined.OpenInNew,
+                    contentDescription = null,
+                    tint = cs.onSurfaceVariant,
+                    modifier = Modifier.size(18.dp),
+                )
+            }
+        }
+
+        SectionHeader(icon = Icons.Outlined.Info, title = "Support")
+        SettingsCard {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { runCatching { uriHandler.openUri("https://github.com/neroices/zibzip/issues/new") } }
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_github),
+                    contentDescription = null,
+                    tint = cs.onSurfaceVariant,
+                    modifier = Modifier.size(24.dp),
+                )
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(horizontal = 14.dp),
+                ) {
+                    Text(
+                        text = "Report an issue on GitHub",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = cs.onSurface,
+                    )
+                    Text(
+                        text = "Open issue tracker in browser",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = cs.onSurfaceVariant,
+                    )
+                }
+                Icon(
+                    imageVector = Icons.AutoMirrored.Outlined.OpenInNew,
+                    contentDescription = null,
+                    tint = cs.onSurfaceVariant,
+                    modifier = Modifier.size(18.dp),
                 )
             }
         }

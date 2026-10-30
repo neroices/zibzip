@@ -2,4 +2,6 @@
 <paths>
     <!-- A file manager must be able to hand any readable file to other apps. -->
     <root-path name="root" path="" />
+    <cache-path name="cache" path="." />
+    <files-path name="files" path="." />
 </paths>
