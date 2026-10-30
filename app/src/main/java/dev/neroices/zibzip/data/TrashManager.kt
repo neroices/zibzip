@@ -132,7 +132,7 @@ class TrashManager(
 
             val size = if (file.isDirectory) {
                 runCatching {
-                    file.walkTopDown().filter { it.isFile }.sumOf { it.length() }
+                    fileOps.folderStats(file).bytes
                 }.getOrDefault(0L)
             } else {
                 file.length()
@@ -225,11 +225,15 @@ class TrashManager(
 
             // 1. Process all existing info metadata files
             if (infoDir.exists() && infoDir.isDirectory) {
+                infoDir.listFiles { _, name -> name.endsWith(".tmp") }?.forEach { it.delete() }
                 val infoFiles = infoDir.listFiles { _, name -> name.endsWith(".json") } ?: emptyArray()
                 for (infoFile in infoFiles) {
                     try {
                         val text = infoFile.readText()
-                        if (text.isBlank()) continue
+                        if (text.isBlank()) {
+                            infoFile.delete()
+                            continue
+                        }
                         val item = runCatching { Json.decodeFromString<TrashedItem>(text) }.getOrNull()
                         val id = item?.id?.ifEmpty { null } ?: infoFile.nameWithoutExtension
                         val origPath = item?.originalPath ?: ""
@@ -254,6 +258,8 @@ class TrashManager(
                                     this.infoFile = infoFile
                                 }
                             )
+                        } else {
+                            infoFile.delete()
                         }
                     } catch (_: Throwable) {
                     }
@@ -351,13 +357,14 @@ class TrashManager(
     }
 
     /** Permanently deletes [item] from trash. */
-    suspend fun deletePermanently(item: TrashedItem): Boolean = withContext(Dispatchers.IO) {
-        val deleted = if (item.trashFile.isDirectory) {
-            item.trashFile.deleteRecursively()
-        } else {
-            item.trashFile.delete()
+    suspend fun deletePermanently(
+        item: TrashedItem,
+        progress: ProgressListener = ProgressListener.None,
+    ): Boolean = withContext(Dispatchers.IO) {
+        if (item.trashFile.exists()) {
+            fileOps.delete(listOf(item.trashFile), progress)
         }
-        val isGone = deleted || !item.trashFile.exists()
+        val isGone = !item.trashFile.exists()
         if (isGone) {
             cachedStats = null
             item.infoFile.delete()
@@ -366,14 +373,16 @@ class TrashManager(
     }
 
     /** Empties all trash directories across all volumes. */
-    suspend fun emptyTrash(): Int = withContext(Dispatchers.IO) {
+    suspend fun emptyTrash(progress: ProgressListener = ProgressListener.None): Int = withContext(Dispatchers.IO) {
         cachedStats = null
         var count = 0
         for (td in getAllTrashDirs()) {
             val filesDir = File(td, FILES_DIR_NAME)
             val infoDir = File(td, INFO_DIR_NAME)
-            filesDir.listFiles()?.forEach {
-                if (it.deleteRecursively()) count++
+            val files = filesDir.listFiles()?.toList() ?: emptyList()
+            if (files.isNotEmpty()) {
+                fileOps.delete(files, progress)
+                count += files.size
             }
             infoDir.listFiles()?.forEach {
                 it.delete()
@@ -397,6 +406,9 @@ class TrashManager(
             val infoDir = File(td, INFO_DIR_NAME)
             if (!infoDir.exists() && !filesDir.exists()) continue
 
+            if (infoDir.exists() && infoDir.isDirectory) {
+                infoDir.listFiles { _, name -> name.endsWith(".tmp") }?.forEach { it.delete() }
+            }
             val infoFiles = infoDir.listFiles { _, name -> name.endsWith(".json") } ?: emptyArray()
             val seenIds = HashSet<String>(infoFiles.size)
 
@@ -410,6 +422,8 @@ class TrashManager(
                     val sizeMatch = SIZE_REGEX.find(text)
                     val size = sizeMatch?.groupValues?.get(1)?.toLongOrNull() ?: 0L
                     totalBytes += if (size > 0) size else trashFile.length()
+                } else {
+                    infoFile.delete()
                 }
             }
 

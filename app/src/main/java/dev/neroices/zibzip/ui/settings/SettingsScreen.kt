@@ -470,10 +470,10 @@ private fun MainSettingsPage(
                         onConfirm = {
                             showEmptyConfirm = false
                             val app = context.zibzipApp
-                            app.appScope.launch {
-                                val count = app.trash.emptyTrash()
+                            app.runner.start("Emptying trash") { p ->
+                                val count = app.trash.emptyTrash(p)
                                 trashStats = app.trash.getTrashStats()
-                                app.toast(if (count > 0) "Emptied $count items from trash" else "Trash is already empty")
+                                if (count > 0) "Emptied $count items from trash" else "Trash is already empty"
                             }
                         },
                         isTrash = true,

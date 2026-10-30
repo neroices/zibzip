@@ -1,5 +1,6 @@
 package dev.neroices.zibzip.data
 
+import dev.neroices.zibzip.domain.ProgressListener
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -112,6 +113,22 @@ class TrashManagerTest {
 
         val success = trashManager.deletePermanently(items.first())
         assertTrue(success)
+        assertEquals(0, trashManager.listTrash().size)
+    }
+
+    @Test
+    fun deletePermanently_reportsProgress() = runBlocking {
+        val file = tmp.newFile("to_delete_progress.txt").apply { writeText("delete me with progress") }
+        trashManager.moveToTrash(listOf(file))
+
+        val items = trashManager.listTrash()
+        assertEquals(1, items.size)
+
+        var progressReported = false
+        val progress = ProgressListener { _, _, _ -> progressReported = true }
+        val success = trashManager.deletePermanently(items.first(), progress)
+        assertTrue(success)
+        assertTrue(progressReported)
         assertEquals(0, trashManager.listTrash().size)
     }
 
@@ -234,6 +251,45 @@ class TrashManagerTest {
         val statsAfterEmpty = trashManager.getTrashStats()
         assertEquals(0, statsAfterEmpty.count)
         assertEquals(0L, statsAfterEmpty.totalBytes)
+    }
+
+    @Test
+    fun moveToTrash_movesDirectory_calculatesStatsCorrectly() = runBlocking {
+        val folder = tmp.newFolder("folder_to_trash")
+        File(folder, "a.txt").writeText("12345")
+        File(folder, "b.txt").writeText("67890")
+        val moved = trashManager.moveToTrash(listOf(folder))
+        assertEquals(1, moved)
+        assertFalse(folder.exists())
+
+        val items = trashManager.listTrash()
+        assertEquals(1, items.size)
+        val item = items.first()
+        assertEquals("folder_to_trash", item.originalName)
+        assertTrue(item.isDirectory)
+        assertEquals(10L, item.size)
+    }
+
+    @Test
+    fun listTrash_prunesOrphanedAndTemporaryMetadata() = runBlocking {
+        val trashDir = File(tmp.root, TrashManager.TRASH_DIR_NAME)
+        val infoDir = File(trashDir, TrashManager.INFO_DIR_NAME).apply { mkdirs() }
+        val orphanInfo = File(infoDir, "orphan_id.json").apply {
+            writeText("""{"id":"orphan_id","originalPath":"/a/b.txt","originalName":"b.txt","deletedAt":1000,"size":5,"isDirectory":false}""")
+        }
+        val tempInfo = File(infoDir, "pending.tmp").apply { writeText("in-progress") }
+        val blankInfo = File(infoDir, "blank.json").apply { writeText("   ") }
+
+        assertTrue(orphanInfo.exists())
+        assertTrue(tempInfo.exists())
+        assertTrue(blankInfo.exists())
+
+        val items = trashManager.listTrash()
+        assertTrue(items.isEmpty())
+
+        assertFalse(orphanInfo.exists())
+        assertFalse(tempInfo.exists())
+        assertFalse(blankInfo.exists())
     }
 }
 
