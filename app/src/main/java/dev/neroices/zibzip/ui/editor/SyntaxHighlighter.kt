@@ -7,9 +7,6 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.OffsetMapping
-import androidx.compose.ui.text.input.TransformedText
-import androidx.compose.ui.text.input.VisualTransformation
 import java.util.regex.Matcher
 import java.util.regex.Pattern
 
@@ -350,87 +347,4 @@ private fun applySearchHighlights(
         builder.addStyle(style, start, end)
         matchIndex++
     }
-}
-
-/**
- * VisualTransformation that applies syntax and search match highlighting.
- */
-class SyntaxHighlightTransformation(
-    private val language: SyntaxLanguage,
-    private val colors: SyntaxColors,
-    private val searchQuery: String = "",
-    private val searchCaseSensitive: Boolean = false,
-    private val activeMatchIndex: Int = -1,
-) : VisualTransformation {
-
-    // Simple cache to avoid recomputing if text and parameters have not changed
-    private var lastRawText: String? = null
-    private var lastTransformed: TransformedText? = null
-
-    override fun filter(text: AnnotatedString): TransformedText {
-        val raw = text.text
-        val cached = lastTransformed
-        if (raw == lastRawText && cached != null) {
-            return cached
-        }
-
-        val highlighted = highlightSyntax(
-            text = raw,
-            language = language,
-            colors = colors,
-            searchQuery = searchQuery,
-            searchCaseSensitive = searchCaseSensitive,
-            activeMatchIndex = activeMatchIndex,
-        )
-
-        val result = TransformedText(highlighted, OffsetMapping.Identity)
-        lastRawText = raw
-        lastTransformed = result
-        return result
-    }
-}
-
-private val lineCache = java.util.Collections.synchronizedMap(
-    object : java.util.LinkedHashMap<String, AnnotatedString>(400, 0.75f, true) {
-        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, AnnotatedString>?): Boolean {
-            return size > 400
-        }
-    }
-)
-
-/**
- * Highlights a single line of text for line-based viewing (LazyColumn).
- */
-fun highlightLine(
-    line: String,
-    language: SyntaxLanguage,
-    colors: SyntaxColors,
-    searchQuery: String = "",
-    searchCaseSensitive: Boolean = false,
-    isActiveMatchLine: Boolean = false,
-): AnnotatedString {
-    if (line.isEmpty()) return AnnotatedString(" ")
-
-    // If active search query, compute directly with search highlights
-    if (searchQuery.isNotEmpty()) {
-        return highlightSyntax(
-            text = line,
-            language = language,
-            colors = colors,
-            searchQuery = searchQuery,
-            searchCaseSensitive = searchCaseSensitive,
-            activeMatchIndex = if (isActiveMatchLine) 0 else -1,
-        )
-    }
-
-    val cacheKey = "${language.name}_${colors.keyword.value}_$line"
-    lineCache[cacheKey]?.let { return it }
-
-    val highlighted = highlightSyntax(
-        text = line,
-        language = language,
-        colors = colors,
-    )
-    lineCache[cacheKey] = highlighted
-    return highlighted
 }

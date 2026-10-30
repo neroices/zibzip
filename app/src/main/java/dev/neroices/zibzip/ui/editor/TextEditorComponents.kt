@@ -7,17 +7,15 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
-import androidx.compose.foundation.ScrollState
-import androidx.compose.foundation.background
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -25,20 +23,24 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.MenuBook
 import androidx.compose.material.icons.automirrored.rounded.OpenInNew
+import androidx.compose.material.icons.automirrored.rounded.Redo
+import androidx.compose.material.icons.automirrored.rounded.Undo
 import androidx.compose.material.icons.automirrored.rounded.WrapText
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Code
 import androidx.compose.material.icons.rounded.ContentCopy
-import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.FormatLineSpacing
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.KeyboardArrowUp
+import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.material.icons.rounded.LockOpen
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Save
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Share
-import androidx.compose.material.icons.rounded.Visibility
+import androidx.compose.material.icons.rounded.ZoomIn
+import androidx.compose.material.icons.rounded.ZoomOut
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -69,10 +71,9 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.neroices.zibzip.domain.formatSize
@@ -87,10 +88,10 @@ internal const val MAX_SUPPORTED_FILE_SIZE = 10L * 1024L * 1024L
 internal fun TextEditorTopBar(
     fileName: String,
     isDirty: Boolean,
-    isEditMode: Boolean,
     isMarkdown: Boolean,
     showMarkdownPreview: Boolean,
     isReadOnly: Boolean,
+    isReadOnlyLock: Boolean,
     language: SyntaxLanguage,
     textLength: Long,
     totalLines: Int,
@@ -98,14 +99,22 @@ internal fun TextEditorTopBar(
     wordWrap: Boolean,
     showLineNumbers: Boolean,
     isSaving: Boolean,
+    canUndo: Boolean,
+    canRedo: Boolean,
+    fontSizeSp: Float,
     editorBackgroundColor: Color,
     onBack: () -> Unit,
+    onUndo: () -> Unit,
+    onRedo: () -> Unit,
     onToggleSearch: () -> Unit,
     onToggleMarkdownPreview: () -> Unit,
-    onToggleEditMode: () -> Unit,
+    onToggleReadOnlyLock: () -> Unit,
     onSave: () -> Unit,
     onToggleWordWrap: () -> Unit,
     onToggleLineNumbers: () -> Unit,
+    onIncreaseFontSize: () -> Unit,
+    onDecreaseFontSize: () -> Unit,
+    onResetFontSize: () -> Unit,
     onCopyAll: () -> Unit,
     onOpenExternal: () -> Unit,
     onShare: () -> Unit,
@@ -134,12 +143,13 @@ internal fun TextEditorTopBar(
                     }
                 }
                 val modeSubtitle = when {
-                    isEditMode -> "Edit Mode"
+                    isReadOnly -> "Read-Only"
+                    isReadOnlyLock -> "Locked"
                     isMarkdown && showMarkdownPreview -> "Preview"
-                    else -> "View Mode"
+                    else -> "Editing"
                 }
                 Text(
-                    text = "${language.displayName} • ${formatSize(textLength)} • $totalLines lines • $modeSubtitle${if (isReadOnly) " • Read-only" else ""}",
+                    text = "${language.displayName} • ${formatSize(textLength)} • $totalLines lines • $modeSubtitle",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -162,25 +172,49 @@ internal fun TextEditorTopBar(
                 )
             }
 
-            if (isMarkdown && !isEditMode) {
+            if (!isReadOnly && !isReadOnlyLock) {
+                IconButton(
+                    onClick = onUndo,
+                    enabled = canUndo,
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Rounded.Undo,
+                        contentDescription = "Undo",
+                        tint = if (canUndo) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
+                    )
+                }
+
+                IconButton(
+                    onClick = onRedo,
+                    enabled = canRedo,
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Rounded.Redo,
+                        contentDescription = "Redo",
+                        tint = if (canRedo) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
+                    )
+                }
+            }
+
+            if (isMarkdown) {
                 IconButton(onClick = onToggleMarkdownPreview) {
                     Icon(
                         imageVector = if (showMarkdownPreview) Icons.Rounded.Code else Icons.AutoMirrored.Rounded.MenuBook,
-                        contentDescription = if (showMarkdownPreview) "View raw markdown" else "View markdown preview",
+                        contentDescription = if (showMarkdownPreview) "View markdown source" else "View markdown preview",
                         tint = if (showMarkdownPreview) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                     )
                 }
             }
 
-            if (!isReadOnly) {
-                IconButton(onClick = onToggleEditMode) {
-                    Icon(
-                        imageVector = if (isEditMode) Icons.Rounded.Visibility else Icons.Rounded.Edit,
-                        contentDescription = if (isEditMode) "Switch to View Mode" else "Switch to Edit Mode",
-                        tint = if (isEditMode) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                    )
-                }
+            IconButton(onClick = onToggleWordWrap) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Rounded.WrapText,
+                    contentDescription = if (wordWrap) "Word wrap ON" else "Word wrap OFF",
+                    tint = if (wordWrap) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
 
+            if (!isReadOnly) {
                 IconButton(
                     onClick = onSave,
                     enabled = !isSaving && isDirty,
@@ -195,7 +229,7 @@ internal fun TextEditorTopBar(
                         Icon(
                             imageVector = Icons.Rounded.Save,
                             contentDescription = "Save",
-                            tint = if (isDirty) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                            tint = if (isDirty) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f),
                         )
                     }
                 }
@@ -212,33 +246,6 @@ internal fun TextEditorTopBar(
                     expanded = showMoreMenu,
                     onDismissRequest = { showMoreMenu = false },
                 ) {
-                    if (isMarkdown && !isEditMode) {
-                        DropdownMenuItem(
-                            text = { Text(if (showMarkdownPreview) "View raw markdown" else "View markdown preview") },
-                            leadingIcon = {
-                                Icon(
-                                    imageVector = if (showMarkdownPreview) Icons.Rounded.Code else Icons.AutoMirrored.Rounded.MenuBook,
-                                    contentDescription = null,
-                                )
-                            },
-                            onClick = {
-                                onToggleMarkdownPreview()
-                                showMoreMenu = false
-                            },
-                        )
-                        HorizontalDivider()
-                    }
-                    DropdownMenuItem(
-                        text = { Text(if (wordWrap) "Disable word wrap" else "Enable word wrap") },
-                        trailingIcon = {
-                            if (wordWrap) Icon(Icons.Rounded.Check, contentDescription = null)
-                        },
-                        leadingIcon = { Icon(Icons.AutoMirrored.Rounded.WrapText, contentDescription = null) },
-                        onClick = {
-                            onToggleWordWrap()
-                            showMoreMenu = false
-                        },
-                    )
                     DropdownMenuItem(
                         text = { Text(if (showLineNumbers) "Hide line numbers" else "Show line numbers") },
                         trailingIcon = {
@@ -247,6 +254,45 @@ internal fun TextEditorTopBar(
                         leadingIcon = { Icon(Icons.Rounded.FormatLineSpacing, contentDescription = null) },
                         onClick = {
                             onToggleLineNumbers()
+                            showMoreMenu = false
+                        },
+                    )
+                    if (!isReadOnly) {
+                        DropdownMenuItem(
+                            text = { Text(if (isReadOnlyLock) "Unlock editing" else "Lock as read-only") },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = if (isReadOnlyLock) Icons.Rounded.LockOpen else Icons.Rounded.Lock,
+                                    contentDescription = null,
+                                )
+                            },
+                            onClick = {
+                                onToggleReadOnlyLock()
+                                showMoreMenu = false
+                            },
+                        )
+                    }
+                    HorizontalDivider()
+                    DropdownMenuItem(
+                        text = { Text("Zoom in (${fontSizeSp.toInt() + 2}sp)") },
+                        leadingIcon = { Icon(Icons.Rounded.ZoomIn, contentDescription = null) },
+                        onClick = {
+                            onIncreaseFontSize()
+                            showMoreMenu = false
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Zoom out (${fontSizeSp.toInt() - 2}sp)") },
+                        leadingIcon = { Icon(Icons.Rounded.ZoomOut, contentDescription = null) },
+                        onClick = {
+                            onDecreaseFontSize()
+                            showMoreMenu = false
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Reset zoom (14sp)") },
+                        onClick = {
+                            onResetFontSize()
                             showMoreMenu = false
                         },
                     )
@@ -350,9 +396,9 @@ internal fun TextEditorSearchBar(
                 )
 
                 Text(
-                    text = if (searchQuery.isEmpty()) "" else if (searchMatchesCount == 0) "0/0" else "${activeMatchIndex + 1}/$searchMatchesCount",
+                    text = if (searchMatchesCount > 0) "${activeMatchIndex + 1}/$searchMatchesCount" else "0",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = colorScheme.onSurfaceVariant,
                 )
 
                 IconButton(
@@ -395,7 +441,99 @@ internal fun TextEditorSearchBar(
 }
 
 @Composable
+internal fun TextEditorStatusBar(
+    cursorLine: Int,
+    cursorCol: Int,
+    selectedChars: Int,
+    totalLines: Int,
+    wordWrap: Boolean,
+    fontSizeSp: Float,
+    isReadOnly: Boolean,
+    colors: SyntaxColors,
+) {
+    Surface(
+        color = colors.gutterBackground,
+        modifier = Modifier
+            .fillMaxWidth()
+            .navigationBarsPadding(),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            val selectionText = if (selectedChars > 0) " ($selectedChars sel)" else ""
+            val statusText = "Ln $cursorLine, Col $cursorCol$selectionText • $totalLines lines${if (isReadOnly) " [Read-Only]" else ""}"
+            Text(
+                text = statusText,
+                style = MaterialTheme.typography.labelSmall,
+                color = colors.gutterText,
+                fontFamily = FontFamily.Monospace,
+            )
+
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "${fontSizeSp.toInt()}sp",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = colors.gutterText,
+                    fontFamily = FontFamily.Monospace,
+                )
+                Text(
+                    text = if (wordWrap) "Wrap: ON" else "Wrap: OFF",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = colors.gutterText,
+                )
+                Text(
+                    text = "UTF-8",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = colors.gutterText,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+internal fun TextEditorErrorView(
+    errorMessage: String,
+    onOpenExternal: () -> Unit,
+) {
+    val colorScheme = MaterialTheme.colorScheme
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Text(
+            text = "Unable to read file",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+        )
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text = errorMessage,
+            style = MaterialTheme.typography.bodyMedium,
+            color = colorScheme.error,
+        )
+        Spacer(Modifier.height(16.dp))
+        Button(onClick = onOpenExternal) {
+            Text("Open in external app")
+        }
+    }
+}
+
+@Composable
 internal fun TextEditorDialogs(
+    showSaveConfirmDialog: Boolean,
+    onDismissSaveConfirmDialog: () -> Unit,
+    onConfirmSave: () -> Unit,
     showUnsavedDialog: Boolean,
     onDismissUnsavedDialog: () -> Unit,
     onConfirmDiscard: () -> Unit,
@@ -416,6 +554,24 @@ internal fun TextEditorDialogs(
     totalLines: Int,
     fileLength: Long,
 ) {
+    if (showSaveConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = onDismissSaveConfirmDialog,
+            title = { Text("Save changes?") },
+            text = { Text("Are you sure you want to save changes to \"$fileName\"?") },
+            confirmButton = {
+                Button(onClick = onConfirmSave) {
+                    Text("Save")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = onDismissSaveConfirmDialog) {
+                    Text("Cancel")
+                }
+            },
+        )
+    }
+
     if (showUnsavedDialog) {
         AlertDialog(
             onDismissRequest = onDismissUnsavedDialog,
@@ -442,11 +598,11 @@ internal fun TextEditorDialogs(
     if (showLargeFileEditDialog) {
         AlertDialog(
             onDismissRequest = onDismissLargeFileDialog,
-            title = { Text("Edit Large File?") },
+            title = { Text("Large file warning") },
             text = {
                 Text(
-                    "This file is ${formatSize(fileLength)} ($totalLines lines). " +
-                        "Editing very large files in the mobile text input may experience typing latency.\n\n" +
+                    "This file is ${formatSize(fileLength)} ($totalLines lines). Editing very large files in " +
+                        "the editor may cause lag or high memory usage.\n\n" +
                         "Would you like to edit directly or open in an external editor?",
                 )
             },
@@ -517,77 +673,6 @@ internal fun TextEditorDialogs(
                     }
                 }
             },
-        )
-    }
-}
-
-@Composable
-internal fun ViewerLineRow(
-    lineNumber: Int,
-    lineText: String,
-    gutterWidth: Dp,
-    showLineNumbers: Boolean,
-    wordWrap: Boolean,
-    language: SyntaxLanguage,
-    colors: SyntaxColors,
-    searchQuery: String,
-    searchCaseSensitive: Boolean,
-    isActiveMatchLine: Boolean,
-    gutterTextStyle: TextStyle,
-    codeTextStyle: TextStyle,
-    horizontalScrollState: ScrollState,
-) {
-    val highlightedText = remember(lineText, language, colors, searchQuery, searchCaseSensitive, isActiveMatchLine) {
-        highlightLine(
-            line = lineText,
-            language = language,
-            colors = colors,
-            searchQuery = searchQuery,
-            searchCaseSensitive = searchCaseSensitive,
-            isActiveMatchLine = isActiveMatchLine,
-        )
-    }
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(min = 20.dp),
-        verticalAlignment = Alignment.Top,
-    ) {
-        if (showLineNumbers) {
-            Text(
-                text = "$lineNumber",
-                style = gutterTextStyle,
-                textAlign = TextAlign.End,
-                modifier = Modifier
-                    .width(gutterWidth)
-                    .padding(end = 8.dp),
-            )
-            Box(
-                modifier = Modifier
-                    .width(1.dp)
-                    .height(20.dp)
-                    .background(colors.gutterText.copy(alpha = 0.2f)),
-            )
-            Spacer(Modifier.width(8.dp))
-        }
-
-        val textModifier = if (wordWrap) {
-            Modifier
-                .weight(1f)
-                .padding(end = 8.dp)
-        } else {
-            Modifier
-                .weight(1f)
-                .horizontalScroll(horizontalScrollState)
-                .padding(end = 8.dp)
-        }
-
-        Text(
-            text = highlightedText,
-            style = codeTextStyle,
-            softWrap = wordWrap,
-            modifier = textModifier,
         )
     }
 }

@@ -169,6 +169,7 @@ dependencies {
     implementation(libs.androidx.compose.material.icons.extended)
     implementation(libs.androidx.media3.exoplayer)
     implementation(libs.androidx.media3.ui)
+    implementation(libs.sora.editor)
     debugImplementation(libs.androidx.compose.ui.tooling)
 
     // Kotlin

@@ -196,6 +196,12 @@ val OpenSourceLibraries = listOf(
         "Apache-2.0",
         "https://github.com/Kotlin/kotlinx.serialization"
     ),
+    Library(
+        "sora-editor",
+        "A cool and optimized code editor",
+        "LGPL-2.1",
+        "https://github.com/Rosemoe/sora-editor"
+    ),
 )
 
 enum class SettingsSubpage {
