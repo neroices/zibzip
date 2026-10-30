@@ -10,6 +10,8 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.IOException
+import java.nio.file.Files
+import java.nio.file.LinkOption
 import java.security.MessageDigest
 
 data class FolderStats(val bytes: Long, val files: Int, val folders: Int)
@@ -78,8 +80,11 @@ class FileOperations {
             }
         }
         val created = ArrayList<File>()
+        val allocated = HashSet<String>(sources.size)
         for (src in sources) {
-            created.add(IoSupport.uniqueChild(destDir, src.name))
+            val child = IoSupport.uniqueChild(destDir, src.name, allocated)
+            allocated += child.name
+            created.add(child)
         }
 
         try {
@@ -87,8 +92,10 @@ class FileOperations {
                 throw CancellationException("Operation cancelled")
             }
             val sourcePaths = sources.map { it.absolutePath }.toTypedArray()
+            val targetPaths = created.map { it.absolutePath }.toTypedArray()
             val bytesCopied = NativeArchiveBridge.nativeCopyFiles(
                 sourcePaths = sourcePaths,
+                targetPaths = targetPaths,
                 destDirPath = destDir.absolutePath,
                 cancelToken = cancelToken,
                 progressListener = { done, total, current ->
@@ -142,9 +149,19 @@ class FileOperations {
         }
 
         if (pending.isNotEmpty()) {
-            copy(pending, destDir, progress)
-            delete(pending, progress)
-            moved += pending.size
+            for (src in pending) {
+                currentCoroutineContext().ensureActive()
+                val copied = copy(listOf(src), destDir, progress)
+                val targetFile = copied.firstOrNull()
+                val targetExists = targetFile != null && Files.exists(
+                    targetFile.toPath(),
+                    LinkOption.NOFOLLOW_LINKS,
+                )
+                if (targetExists) {
+                    delete(listOf(src), progress)
+                    moved++
+                }
+            }
         }
 
         moved

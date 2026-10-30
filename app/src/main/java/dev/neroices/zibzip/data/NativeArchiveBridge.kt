@@ -118,6 +118,7 @@ object NativeArchiveBridge {
 
     external fun nativeCopyFiles(
         sourcePaths: Array<String>,
+        targetPaths: Array<String>,
         destDirPath: String,
         cancelToken: Long,
         progressListener: NativeProgressListener?,

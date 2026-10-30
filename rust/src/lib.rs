@@ -615,12 +615,17 @@ pub extern "system" fn Java_dev_neroices_zibzip_data_NativeArchiveBridge_nativeC
     mut env: EnvUnowned<'local>,
     _class: JClass<'local>,
     source_paths: JObjectArray<'local, JString<'local>>,
+    target_paths: JObjectArray<'local, JString<'local>>,
     dest_dir_path: JString<'local>,
     cancel_token: jlong,
     progress_listener: JObject<'local>,
 ) -> jlong {
     env.with_env(|env| -> Result<jlong, jni::errors::Error> {
         let sources = match extract_string_array(env, &source_paths) {
+            Ok(s) => s.into_iter().map(PathBuf::from).collect::<Vec<_>>(),
+            Err(_) => return Ok(-1),
+        };
+        let targets = match extract_string_array(env, &target_paths) {
             Ok(s) => s.into_iter().map(PathBuf::from).collect::<Vec<_>>(),
             Err(_) => return Ok(-1),
         };
@@ -642,6 +647,7 @@ pub extern "system" fn Java_dev_neroices_zibzip_data_NativeArchiveBridge_nativeC
         let res = catch_panic(|| {
             file_ops::copy_files(
                 &sources,
+                &targets,
                 Path::new(&dest_str),
                 cancel_ptr,
                 |done, total, cur| tracker.report(done, total, cur, false),

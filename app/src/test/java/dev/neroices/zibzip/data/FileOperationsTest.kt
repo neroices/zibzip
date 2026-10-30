@@ -35,6 +35,25 @@ class FileOperationsTest {
     }
 
     @Test
+    fun copy_allocatesDistinctNamesForIdenticalNamesInSameBatch() {
+        runBlocking {
+            val dir1 = tmp.newFolder("dir1")
+            val dir2 = tmp.newFolder("dir2")
+            val f1 = File(dir1, "item.txt").apply { writeText("one") }
+            val f2 = File(dir2, "item.txt").apply { writeText("two") }
+            val dest = tmp.newFolder("dest_batch")
+
+            val copies = ops.copy(listOf(f1, f2), dest)
+
+            assertEquals(2, copies.size)
+            assertEquals("item.txt", copies[0].name)
+            assertEquals("item (1).txt", copies[1].name)
+            assertTrue(File(dest, "item.txt").exists())
+            assertTrue(File(dest, "item (1).txt").exists())
+        }
+    }
+
+    @Test
     fun copy_folderRecursively() {
         runBlocking {
             val src = tmp.newFolder("tree")

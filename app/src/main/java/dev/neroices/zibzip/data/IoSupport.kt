@@ -14,9 +14,9 @@ internal object IoSupport {
     private fun exists(file: File) = Files.exists(file.toPath(), LinkOption.NOFOLLOW_LINKS)
 
     /** "name (1).ext", "name (2).ext", ... until a free name is found. */
-    fun uniqueChild(dir: File, name: String): File {
+    fun uniqueChild(dir: File, name: String, reserved: Set<String> = emptySet()): File {
         var candidate = File(dir, name)
-        if (!exists(candidate)) return candidate
+        if (!exists(candidate) && candidate.name !in reserved) return candidate
         val base: String
         val ext: String
         val format = ArchiveFormat.detect(name)
@@ -38,7 +38,7 @@ internal object IoSupport {
         var i = 1
         while (true) {
             candidate = File(dir, "$base ($i)$ext")
-            if (!exists(candidate)) return candidate
+            if (!exists(candidate) && candidate.name !in reserved) return candidate
             i++
         }
     }

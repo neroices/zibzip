@@ -372,10 +372,17 @@ fn unique_child_path(dest_dir: &Path, name: &std::ffi::OsStr) -> PathBuf {
 
 pub fn copy_files(
     sources: &[PathBuf],
+    targets: &[PathBuf],
     dest_dir: &Path,
     cancel_token: *const AtomicBool,
     mut on_progress: impl FnMut(i64, i64, &str) -> Result<(), ()>,
 ) -> Result<i64, std::io::Error> {
+    if sources.len() != targets.len() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "sources and targets length mismatch",
+        ));
+    }
     fs::create_dir_all(dest_dir)?;
 
     let mut total_bytes = 0i64;
@@ -392,15 +399,40 @@ pub fn copy_files(
     let mut copied_bytes = 0i64;
     let mut buf = vec![0u8; BUFFER_SIZE];
 
-    for src in sources {
+    for (src, target_path) in sources.iter().zip(targets.iter()) {
+        if !cancel_token.is_null()
+            && unsafe { (*cancel_token).load(AtomicOrdering::Relaxed) }
+        {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::Interrupted,
+                "Operation cancelled",
+            ));
+        }
+
         let src_name = match src.file_name() {
             Some(n) => n,
             None => continue,
         };
 
-        if src.is_dir() {
-            let target_root = unique_child_path(dest_dir, src_name);
-            fs::create_dir_all(&target_root)?;
+        let meta = match src.symlink_metadata() {
+            Ok(m) => m,
+            Err(_) => continue,
+        };
+
+        if meta.file_type().is_symlink() {
+            if let Some(parent) = target_path.parent() {
+                fs::create_dir_all(parent)?;
+            }
+            #[cfg(unix)]
+            if let Ok(link_dest) = fs::read_link(src) {
+                let _ = fs::remove_file(target_path);
+                let _ = std::os::unix::fs::symlink(&link_dest, target_path);
+            }
+            let file_name_str = src_name.to_string_lossy();
+            let _ = on_progress(copied_bytes, total_bytes, &file_name_str);
+        } else if meta.is_dir() {
+            let target_root = target_path;
+            fs::create_dir_all(target_root)?;
 
             for entry in WalkDir::new(src).min_depth(1) {
                 if !cancel_token.is_null()
@@ -462,11 +494,13 @@ pub fn copy_files(
                     }
                 }
             }
-        } else if src.is_file() {
-            let target_path = unique_child_path(dest_dir, src_name);
+        } else if meta.is_file() {
+            if let Some(parent) = target_path.parent() {
+                fs::create_dir_all(parent)?;
+            }
             let file_name_str = src_name.to_string_lossy();
             let mut reader = File::open(src)?;
-            let mut writer = File::create(&target_path)?;
+            let mut writer = File::create(target_path)?;
 
             loop {
                 if !cancel_token.is_null()
@@ -619,8 +653,10 @@ mod tests {
         let dest_dir = temp_dir.join("dest");
         fs::create_dir_all(&dest_dir).unwrap();
 
+        let targets = vec![dest_dir.join("src")];
         let res = copy_files(
             &[src_dir],
+            &targets,
             &dest_dir,
             std::ptr::null(),
             |_, _, _| Ok(()),
@@ -631,6 +667,44 @@ mod tests {
         let meta = fs::symlink_metadata(&copied_link).expect("symlink should exist at dest");
         assert!(meta.file_type().is_symlink());
         assert_eq!(fs::read_link(&copied_link).unwrap(), PathBuf::from("real.txt"));
+
+        let _ = fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn test_copy_files_preserves_top_level_broken_symlink() {
+        let temp_dir = std::env::temp_dir().join(format!(
+            "zibzip_test_copy_top_symlink_{}",
+            std::time::SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir_all(&temp_dir).unwrap();
+        let broken_link = temp_dir.join("broken_link.txt");
+        std::os::unix::fs::symlink("non_existent_target.txt", &broken_link).unwrap();
+
+        let dest_dir = temp_dir.join("dest");
+        fs::create_dir_all(&dest_dir).unwrap();
+
+        let targets = vec![dest_dir.join("broken_link.txt")];
+        let res = copy_files(
+            &[broken_link],
+            &targets,
+            &dest_dir,
+            std::ptr::null(),
+            |_, _, _| Ok(()),
+        );
+        assert!(res.is_ok(), "Copying top-level broken symlink should succeed");
+
+        let copied_link = dest_dir.join("broken_link.txt");
+        let meta = fs::symlink_metadata(&copied_link).expect("broken symlink should exist at dest");
+        assert!(meta.file_type().is_symlink());
+        assert_eq!(
+            fs::read_link(&copied_link).unwrap(),
+            PathBuf::from("non_existent_target.txt")
+        );
 
         let _ = fs::remove_dir_all(&temp_dir);
     }
