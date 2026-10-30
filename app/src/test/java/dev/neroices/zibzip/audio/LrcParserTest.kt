@@ -83,4 +83,20 @@ class LrcParserTest {
         assertTrue(result.isEmpty())
         tempFolder.deleteRecursively()
     }
+
+    @Test
+    fun findAndParseForAudio_supportsCaseInsensitiveMatching() {
+        val tempFolder = java.io.File(System.getProperty("java.io.tmpdir"), "lrc_test_case_${System.nanoTime()}").apply { mkdirs() }
+        val audio = java.io.File(tempFolder, "track.mp3").apply { writeBytes(byteArrayOf(1, 2, 3)) }
+        val lrc = java.io.File(tempFolder, "TRACK.LRC").apply {
+            writeText("[00:05.00]Case insensitive lyrics\n")
+        }
+
+        val result = LrcParser.findAndParseForAudio(audio.absolutePath)
+        assertEquals(1, result.size)
+        assertEquals(5000L, result[0].timestampMs)
+        assertEquals("Case insensitive lyrics", result[0].text)
+
+        tempFolder.deleteRecursively()
+    }
 }

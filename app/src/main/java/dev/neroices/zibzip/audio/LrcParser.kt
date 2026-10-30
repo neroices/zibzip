@@ -61,14 +61,17 @@ object LrcParser {
             val parent = audioFile.parentFile ?: return emptyList()
             val baseName = audioFile.nameWithoutExtension
 
-            val directFile = File(parent, "$baseName.lrc")
-            val lrcFile = if (directFile.exists() && directFile.isFile) {
-                directFile
-            } else {
-                parent.listFiles()?.firstOrNull { file ->
-                    file.isFile && file.name.equals("$baseName.lrc", ignoreCase = true)
-                }
-            } ?: return emptyList()
+            val candidates = listOf(
+                File(parent, "$baseName.lrc"),
+                File(parent, "$baseName.LRC"),
+                File(parent, "$baseName.Lrc"),
+            )
+            val lrcFile = candidates.firstOrNull { it.exists() && it.isFile }
+                ?: parent.listFiles { _, name -> name.endsWith(".lrc", ignoreCase = true) }
+                    ?.firstOrNull { file ->
+                        file.isFile && file.name.equals("$baseName.lrc", ignoreCase = true)
+                    }
+                ?: return emptyList()
 
             if (!lrcFile.canRead() || lrcFile.length() > MAX_LRC_SIZE) return emptyList()
             val content = readTextSafely(lrcFile)
