@@ -7,7 +7,7 @@ plugins {
     alias(libs.plugins.detekt)
 }
 
-val baseVersion = "0.1.4"
+val baseVersion = "0.1.5"
 
 val gitCommitCount: Int = runCatching {
     providers.exec {
