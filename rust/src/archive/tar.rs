@@ -58,14 +58,15 @@ pub(crate) fn list_tar(
 
 pub(crate) fn extract_tar(
     archive_path: &Path,
-    _dest_dir: &Path,
+    dest_dir: &Path,
     format: Format,
     match_fn: &impl Fn(&str) -> bool,
     rel_fn: &impl Fn(&str) -> String,
-    resolve_target: &impl Fn(&str) -> Option<PathBuf>,
+    resolve_target: &impl Fn(&str, bool) -> Option<PathBuf>,
     cancel_token: *const AtomicBool,
     mut on_progress: impl FnMut(i64, i64, &str) -> Result<(), ()>,
 ) -> Result<i32, Box<dyn std::error::Error + Send + Sync>> {
+    let dest_canonical = dest_dir.canonicalize().unwrap_or_else(|_| dest_dir.to_path_buf());
     let file = File::open(archive_path)?;
     let total_bytes = file.metadata()?.len() as i64;
     let reader = BufReader::with_capacity(BUFFER_SIZE, file);
@@ -113,20 +114,61 @@ pub(crate) fn extract_tar(
         }
 
         let header = entry.header();
+        if header.entry_type().is_symlink() || header.entry_type().is_hard_link() {
+            if let Ok(Some(link_target)) = entry.link_name() {
+                let link_str = link_target.to_string_lossy();
+                if link_str.contains("..") || link_target.is_absolute() {
+                    return Err("Zip-slip path traversal is unsupported".into());
+                }
+            }
+        }
+
         if header.entry_type().is_dir() {
-            if let Some(target) = resolve_target(&rel) {
-                fs::create_dir_all(target)?;
+            if let Some(target) = resolve_target(&rel, true) {
+                fs::create_dir_all(&target)?;
+                if let Ok(canon) = target.canonicalize() {
+                    if !canon.starts_with(&dest_canonical) {
+                        return Err("Zip-slip path traversal is unsupported".into());
+                    }
+                }
             }
             continue;
         }
 
-        let target = match resolve_target(&rel) {
+        let target = match resolve_target(&rel, false) {
             Some(t) => t,
             None => continue,
         };
 
         if let Some(parent) = target.parent() {
             fs::create_dir_all(parent)?;
+            if let Ok(canon) = parent.canonicalize() {
+                if !canon.starts_with(&dest_canonical) {
+                    return Err("Zip-slip path traversal is unsupported".into());
+                }
+            }
+        }
+
+        if header.entry_type().is_symlink() {
+            if let Ok(Some(link_target)) = entry.link_name() {
+                let link_str = link_target.to_string_lossy();
+                if link_str.contains("..") || link_target.is_absolute() {
+                    return Err("Zip-slip path traversal is unsupported".into());
+                }
+                #[cfg(unix)]
+                {
+                    let _ = fs::remove_file(&target);
+                    let _ = std::os::unix::fs::symlink(&link_target, &target);
+                }
+            }
+            extracted_count += 1;
+            continue;
+        }
+
+        if let Ok(meta) = fs::symlink_metadata(&target) {
+            if meta.file_type().is_symlink() {
+                let _ = fs::remove_file(&target);
+            }
         }
 
         let cur_name = target

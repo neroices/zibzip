@@ -15,7 +15,7 @@ pub(crate) fn extract_single(
     _dest_dir: &Path,
     format: Format,
     rel_fn: &impl Fn(&str) -> String,
-    resolve_target: &impl Fn(&str) -> Option<PathBuf>,
+    resolve_target: &impl Fn(&str, bool) -> Option<PathBuf>,
     cancel_token: *const AtomicBool,
     mut on_progress: impl FnMut(i64, i64, &str) -> Result<(), ()>,
 ) -> Result<i32, Box<dyn std::error::Error + Send + Sync>> {
@@ -43,7 +43,7 @@ pub(crate) fn extract_single(
     let stem = strip_format_suffix(&file_name, format);
     let name = if stem.is_empty() { "output" } else { stem };
     let rel = rel_fn(name);
-    let target = match resolve_target(&rel) {
+    let target = match resolve_target(&rel, false) {
         Some(t) => t,
         None => return Ok(0),
     };
@@ -52,7 +52,7 @@ pub(crate) fn extract_single(
         fs::create_dir_all(parent)?;
     }
 
-    let mut writer = BufWriter::with_capacity(BUFFER_SIZE, File::create(&target)?);
+    let mut writer = File::create(&target)?;
     let mut buf = vec![0u8; BUFFER_SIZE];
 
     loop {

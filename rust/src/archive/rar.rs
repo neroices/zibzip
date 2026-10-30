@@ -45,7 +45,7 @@ pub(crate) fn extract_rar(
     password: Option<&str>,
     match_fn: &impl Fn(&str) -> bool,
     rel_fn: &impl Fn(&str) -> String,
-    resolve_target: &impl Fn(&str) -> Option<PathBuf>,
+    resolve_target: &impl Fn(&str, bool) -> Option<PathBuf>,
     cancel_token: *const AtomicBool,
     mut on_progress: impl FnMut(i64, i64, &str) -> Result<(), ()>,
 ) -> Result<i32, Box<dyn std::error::Error + Send + Sync>> {
@@ -101,7 +101,7 @@ pub(crate) fn extract_rar(
                 }
 
                 let rel = rel_fn(&norm);
-                if let Some(target) = resolve_target(&rel) {
+                if let Some(target) = resolve_target(&rel, meta.is_directory) {
                     if meta.is_directory {
                         let _ = fs::create_dir_all(&target);
                         Ok(Box::new(std::io::sink()))

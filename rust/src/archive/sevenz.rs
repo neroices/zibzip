@@ -1,5 +1,5 @@
 use std::fs::{self, File};
-use std::io::{BufWriter, Write};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering as AtomicOrdering};
 use walkdir::WalkDir;
@@ -16,8 +16,9 @@ pub(crate) fn list_sevenz(
         .unwrap_or_default();
     let sz = sevenz_rust::ArchiveReader::open(archive_path, pw)?;
     let mut out = Vec::new();
+    let archive = sz.archive();
 
-    for entry in &sz.archive().files {
+    for (file_idx, entry) in archive.files.iter().enumerate() {
         if entry.is_anti_item {
             continue;
         }
@@ -37,13 +38,31 @@ pub(crate) fn list_sevenz(
             0
         };
 
+        let is_encrypted = if entry.has_stream {
+            archive
+                .stream_map
+                .file_block_index
+                .get(file_idx)
+                .copied()
+                .flatten()
+                .and_then(|idx| archive.blocks.get(idx))
+                .map(|b| {
+                    b.coders.iter().any(|c| {
+                        c.encoder_method_id() == sevenz_rust::EncoderMethod::ID_AES256_SHA256
+                    })
+                })
+                .unwrap_or(false)
+        } else {
+            false
+        };
+
         out.push(ArchiveEntryData {
             path: name,
             is_directory: is_dir,
             size,
             compressed_size: -1,
             last_modified,
-            is_encrypted: false,
+            is_encrypted,
         });
     }
 
@@ -56,7 +75,7 @@ pub(crate) fn extract_sevenz(
     password: Option<&str>,
     match_fn: &impl Fn(&str) -> bool,
     rel_fn: &impl Fn(&str) -> String,
-    resolve_target: &impl Fn(&str) -> Option<PathBuf>,
+    resolve_target: &impl Fn(&str, bool) -> Option<PathBuf>,
     cancel_token: *const AtomicBool,
     mut on_progress: impl FnMut(i64, i64, &str) -> Result<(), ()>,
 ) -> Result<i32, Box<dyn std::error::Error + Send + Sync>> {
@@ -78,6 +97,7 @@ pub(crate) fn extract_sevenz(
 
     let mut done_bytes = 0i64;
     let mut extracted_count = 0i32;
+    let mut buf = vec![0u8; BUFFER_SIZE];
 
     let file = File::open(archive_path)?;
     sevenz_rust::decompress_with_extract_fn_and_password(
@@ -86,7 +106,7 @@ pub(crate) fn extract_sevenz(
         pw,
         |entry, reader, _dest| {
             if !cancel_token.is_null() && unsafe { (*cancel_token).load(AtomicOrdering::Relaxed) } {
-                return Ok(false);
+                return Err(sevenz_rust::Error::Other("Operation cancelled".into()));
             }
 
             let entry_name = entry.name().to_string();
@@ -111,13 +131,13 @@ pub(crate) fn extract_sevenz(
             }
 
             if entry.is_directory {
-                if let Some(target) = resolve_target(&rel) {
+                if let Some(target) = resolve_target(&rel, true) {
                     let _ = fs::create_dir_all(target);
                 }
                 return Ok(true);
             }
 
-            let target = match resolve_target(&rel) {
+            let target = match resolve_target(&rel, false) {
                 Some(t) => t,
                 None => return Ok(true),
             };
@@ -131,17 +151,16 @@ pub(crate) fn extract_sevenz(
                 .map(|n| n.to_string_lossy())
                 .unwrap_or_default();
             let mut writer = match File::create(&target) {
-                Ok(f) => BufWriter::with_capacity(BUFFER_SIZE, f),
+                Ok(f) => f,
                 Err(e) => return Err(sevenz_rust::Error::from(e)),
             };
 
-            let mut buf = vec![0u8; BUFFER_SIZE];
             loop {
                 if !cancel_token.is_null()
                     && unsafe { (*cancel_token).load(AtomicOrdering::Relaxed) }
                 {
                     let _ = fs::remove_file(&target);
-                    return Ok(false);
+                    return Err(sevenz_rust::Error::Other("Operation cancelled".into()));
                 }
 
                 let n = match reader.read(&mut buf) {
@@ -155,7 +174,10 @@ pub(crate) fn extract_sevenz(
                     return Err(sevenz_rust::Error::from(e));
                 }
                 done_bytes += n as i64;
-                let _ = on_progress(done_bytes, total_bytes, &cur_name);
+                if on_progress(done_bytes, total_bytes, &cur_name).is_err() {
+                    let _ = fs::remove_file(&target);
+                    return Err(sevenz_rust::Error::Other("Operation cancelled".into()));
+                }
             }
             let _ = writer.flush();
             extracted_count += 1;

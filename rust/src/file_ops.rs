@@ -341,7 +341,7 @@ pub fn folder_stats(
     Ok([total_bytes, file_count, folder_count])
 }
 
-fn unique_child_path(dest_dir: &Path, name: &std::ffi::OsStr) -> PathBuf {
+pub fn unique_child_path(dest_dir: &Path, name: &std::ffi::OsStr) -> PathBuf {
     let base = dest_dir.join(name);
     if base.symlink_metadata().is_err() {
         return base;

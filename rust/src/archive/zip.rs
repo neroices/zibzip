@@ -62,7 +62,7 @@ pub(crate) fn extract_zip(
     password: Option<&str>,
     match_fn: &impl Fn(&str) -> bool,
     rel_fn: &impl Fn(&str) -> String,
-    resolve_target: &impl Fn(&str) -> Option<PathBuf>,
+    resolve_target: &impl Fn(&str, bool) -> Option<PathBuf>,
     cancel_token: *const AtomicBool,
     mut on_progress: impl FnMut(i64, i64, &str) -> Result<(), ()>,
 ) -> Result<i32, Box<dyn std::error::Error + Send + Sync>> {
@@ -88,8 +88,13 @@ pub(crate) fn extract_zip(
             return Err("Operation cancelled".into());
         }
 
-        let mut entry = if let Some(pw) = password {
-            zip.by_index_decrypt(i, pw.as_bytes())?
+        let is_encrypted = zip.by_index_raw(i)?.encrypted();
+        let mut entry = if is_encrypted {
+            if let Some(pw) = password {
+                zip.by_index_decrypt(i, pw.as_bytes())?
+            } else {
+                return Err("Password required to decrypt entry".into());
+            }
         } else {
             zip.by_index(i)?
         };
@@ -112,13 +117,13 @@ pub(crate) fn extract_zip(
         }
 
         if entry.is_dir() {
-            if let Some(target) = resolve_target(&rel) {
+            if let Some(target) = resolve_target(&rel, true) {
                 fs::create_dir_all(target)?;
             }
             continue;
         }
 
-        let target = match resolve_target(&rel) {
+        let target = match resolve_target(&rel, false) {
             Some(t) => t,
             None => {
                 done_bytes += entry.size() as i64;

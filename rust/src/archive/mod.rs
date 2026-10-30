@@ -116,7 +116,7 @@ pub fn extract_archive(
         }
     };
 
-    let resolve_target = |rel_path: &str| -> Option<PathBuf> {
+    let resolve_target = |rel_path: &str, is_dir_entry: bool| -> Option<PathBuf> {
         if rel_path.is_empty() {
             return None;
         }
@@ -130,35 +130,29 @@ pub fn extract_archive(
         }
         let target = dest_dir.join(rel);
 
-        if !target.exists() {
+        let exists = target.symlink_metadata().is_ok();
+        if !exists {
             return Some(target);
         }
-        if target.is_dir() {
+        if target.is_dir() && is_dir_entry {
             return Some(target);
         }
 
         match conflict_policy {
-            1 => Some(target), // Overwrite
-            2 => None,         // Skip
+            1 => {
+                if target.is_dir() && !is_dir_entry {
+                    let _ = fs::remove_dir_all(&target);
+                } else if !target.is_dir() && is_dir_entry {
+                    let _ = fs::remove_file(&target);
+                }
+                Some(target)
+            }
+            2 => None, // Skip
             _ => {
                 // KeepBoth
                 let parent = target.parent().unwrap_or(dest_dir);
-                let stem = target
-                    .file_stem()
-                    .map(|s| s.to_string_lossy())
-                    .unwrap_or_default();
-                let ext = target
-                    .extension()
-                    .map(|e| format!(".{}", e.to_string_lossy()))
-                    .unwrap_or_default();
-                let mut idx = 1;
-                loop {
-                    let candidate = parent.join(format!("{} ({}){}", stem, idx, ext));
-                    if !candidate.exists() {
-                        return Some(candidate);
-                    }
-                    idx += 1;
-                }
+                let file_name = target.file_name()?;
+                Some(crate::file_ops::unique_child_path(parent, file_name))
             }
         }
     };
