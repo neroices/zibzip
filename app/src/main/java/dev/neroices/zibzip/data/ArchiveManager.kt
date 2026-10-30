@@ -74,9 +74,7 @@ class ArchiveManager {
                 password = password,
                 conflictPolicy = conflictInt,
                 cancelToken = cancelToken,
-                progressListener = { done, total, current ->
-                    progress.onProgress(done, total, current)
-                },
+                progressListener = progress.toNative(),
             )
             if (count < 0) {
                 if (job?.isCancelled == true) {
@@ -142,9 +140,7 @@ class ArchiveManager {
                 level = level,
                 password = password,
                 cancelToken = cancelToken,
-                progressListener = { done, total, current ->
-                    progress.onProgress(done, total, current)
-                },
+                progressListener = progress.toNative(),
             )
             if (bytes < 0) {
                 if (job?.isCancelled == true) {
@@ -197,9 +193,7 @@ class ArchiveManager {
                 archivePath = archive.absolutePath,
                 pathsToRemove = paths.toTypedArray(),
                 cancelToken = cancelToken,
-                progressListener = { done, total, current ->
-                    progress.onProgress(done, total, current)
-                },
+                progressListener = progress.toNative(),
             )
             if (removed < 0) {
                 if (job?.isCancelled == true) {
@@ -251,9 +245,7 @@ class ArchiveManager {
                 level = level,
                 password = password,
                 cancelToken = cancelToken,
-                progressListener = { done, total, current ->
-                    progress.onProgress(done, total, current)
-                },
+                progressListener = progress.toNative(),
             )
             if (added < 0) {
                 if (job?.isCancelled == true) {

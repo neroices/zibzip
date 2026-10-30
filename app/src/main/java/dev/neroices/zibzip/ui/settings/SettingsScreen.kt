@@ -490,11 +490,12 @@ private fun MainSettingsPage(
                         onConfirm = {
                             showEmptyConfirm = false
                             val app = context.zibzipApp
-                            app.runner.start("Emptying trash") { p ->
+                            val started = app.runner.start("Emptying trash", trackSpeed = false) { p ->
                                 val count = app.trash.emptyTrash(p)
                                 trashStats = app.trash.getTrashStats()
                                 if (count > 0) "Emptied $count items from trash" else "Trash is already empty"
                             }
+                            if (!started) app.toast("Too many operations running")
                         },
                         isTrash = true,
                     )

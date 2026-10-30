@@ -98,9 +98,7 @@ class FileOperations {
                 targetPaths = targetPaths,
                 destDirPath = destDir.absolutePath,
                 cancelToken = cancelToken,
-                progressListener = { done, total, current ->
-                    progress.onProgress(done, total, current)
-                },
+                progressListener = progress.toNative(),
             )
             if (bytesCopied < 0) {
                 if (job?.isCancelled == true) {
@@ -188,9 +186,7 @@ class FileOperations {
             val deleted = NativeArchiveBridge.nativeDeleteFiles(
                 paths = paths,
                 cancelToken = cancelToken,
-                progressListener = { done, total, current ->
-                    progress.onProgress(done, total, current)
-                },
+                progressListener = progress.toNative(),
             )
             if (deleted < 0) {
                 if (job?.isCancelled == true) {

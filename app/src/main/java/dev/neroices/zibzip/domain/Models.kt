@@ -233,7 +233,7 @@ sealed interface OpState {
         val id: String = java.util.UUID.randomUUID().toString(),
         val keepScreenOn: Boolean = false,
     ) : OpState {
-        val fraction: Float? get() = if (total > 0) (done.toFloat() / total).coerceIn(0f, 1f) else null
+        val fraction: Float? get() = if (total > 0) (done.toDouble() / total.toDouble()).toFloat().coerceIn(0f, 1f) else null
         val percentage: Int get() = fraction?.let { (it * 100).toInt() } ?: 0
     }
 }

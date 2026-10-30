@@ -58,6 +58,25 @@ class ModelsTest {
     }
 
     @Test
+    fun runningState_fractionAndPercentageCalculations() {
+        val zeroTotal = OpState.Running(title = "Task", done = 0, total = 0)
+        assertNull(zeroTotal.fraction)
+        assertEquals(0, zeroTotal.percentage)
+
+        val halfDone = OpState.Running(title = "Task", done = 50, total = 100)
+        assertEquals(0.5f, halfDone.fraction!!, 0.0001f)
+        assertEquals(50, halfDone.percentage)
+
+        val largeBytes = OpState.Running(title = "Task", done = 7_500_000_000L, total = 10_000_000_000L)
+        assertEquals(0.75f, largeBytes.fraction!!, 0.0001f)
+        assertEquals(75, largeBytes.percentage)
+
+        val overflow = OpState.Running(title = "Task", done = 150, total = 100)
+        assertEquals(1.0f, overflow.fraction!!, 0.0001f)
+        assertEquals(100, overflow.percentage)
+    }
+
+    @Test
     fun fileKind_isDetectedFromName() {
         assertEquals(FileKind.Archive, FileTypes.kindOf("x.tar.xz", false))
         assertEquals(FileKind.Image, FileTypes.kindOf("x.PNG", false))

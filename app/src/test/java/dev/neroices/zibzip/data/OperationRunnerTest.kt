@@ -172,4 +172,107 @@ class OperationRunnerTest {
 
         gate.complete(Unit)
     }
+
+    @Test
+    fun progressUpdates_areThrottledAndCompleteAtFinalTick(): Unit = runBlocking {
+        val testScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        val runner = OperationRunner(testScope)
+
+        val gate = CompletableDeferred<Unit>()
+        val initialTickReceived = CompletableDeferred<Unit>()
+        val finalTickReceived = CompletableDeferred<Unit>()
+
+        val started = runner.start("Progress Task") { p ->
+            p.onProgress(10, 100, "file1")
+            p.onProgress(20, 100, "file2")
+            p.onProgress(30, 100, "file3")
+            initialTickReceived.complete(Unit)
+
+            p.onProgress(100, 100, "file10")
+            finalTickReceived.complete(Unit)
+
+            gate.await()
+            "Done"
+        }
+        assertTrue(started)
+
+        initialTickReceived.await()
+        finalTickReceived.await()
+
+        withTimeout(3000) {
+            while (runner.tasks.value.firstOrNull()?.done != 100L) {
+                delay(10)
+            }
+        }
+
+        val task = runner.tasks.value.first()
+        assertEquals(100L, task.done)
+        assertEquals(100L, task.total)
+        assertEquals("file10", task.current)
+
+        gate.complete(Unit)
+    }
+
+    @Test
+    fun speedCalculation_disabledWhenTrackSpeedIsFalse(): Unit = runBlocking {
+        val testScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        val runner = OperationRunner(testScope)
+
+        val gate = CompletableDeferred<Unit>()
+        val progressSent = CompletableDeferred<Unit>()
+
+        val started = runner.start("Item Count Task", trackSpeed = false) { p ->
+            p.onProgress(1, 10, "item1")
+            delay(300)
+            p.onProgress(5, 10, "item5")
+            progressSent.complete(Unit)
+            gate.await()
+            "Done"
+        }
+        assertTrue(started)
+
+        progressSent.await()
+        withTimeout(3000) {
+            while (runner.tasks.value.firstOrNull()?.done != 5L) {
+                delay(10)
+            }
+        }
+
+        val task = runner.tasks.value.first()
+        assertEquals(5L, task.done)
+        assertEquals(0L, task.speedBytesPerSec)
+
+        gate.complete(Unit)
+    }
+
+    @Test
+    fun speedCalculation_measuresThroughputBetweenTicks(): Unit = runBlocking {
+        val testScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        val runner = OperationRunner(testScope)
+
+        val gate = CompletableDeferred<Unit>()
+        val speedComputed = CompletableDeferred<Unit>()
+
+        val started = runner.start("Transfer Task", trackSpeed = true) { p ->
+            p.onProgress(1_000_000, 10_000_000, "chunk1")
+            delay(300)
+            p.onProgress(4_000_000, 10_000_000, "chunk2")
+            speedComputed.complete(Unit)
+            gate.await()
+            "Done"
+        }
+        assertTrue(started)
+
+        speedComputed.await()
+        withTimeout(3000) {
+            while ((runner.tasks.value.firstOrNull()?.speedBytesPerSec ?: 0L) == 0L) {
+                delay(10)
+            }
+        }
+
+        val task = runner.tasks.value.first()
+        assertTrue("Speed should be positive", task.speedBytesPerSec > 0L)
+
+        gate.complete(Unit)
+    }
 }

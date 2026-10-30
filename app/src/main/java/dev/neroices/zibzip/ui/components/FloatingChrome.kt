@@ -3,6 +3,7 @@ package dev.neroices.zibzip.ui.components
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -361,11 +362,14 @@ fun OperationCard(state: OpState.Running, onCancel: () -> Unit, modifier: Modifi
                 )
                 // Real-time speed and percentage indicator
                 val speedText = if (state.speedBytesPerSec > 0) " · ${formatSize(state.speedBytesPerSec)}/s" else ""
-                Text(
-                    text = "${state.percentage}%$speedText",
-                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                    color = cs.primary,
-                )
+                val progressLabel = if (state.total > 0) "${state.percentage}%$speedText" else if (speedText.isNotEmpty()) speedText.removePrefix(" · ") else ""
+                if (progressLabel.isNotEmpty()) {
+                    Text(
+                        text = progressLabel,
+                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                        color = cs.primary,
+                    )
+                }
                 TextButton(onClick = onCancel) {
                     Text(
                         "Cancel",
@@ -376,8 +380,12 @@ fun OperationCard(state: OpState.Running, onCancel: () -> Unit, modifier: Modifi
             }
             val fraction = state.fraction
             if (fraction != null) {
+                val animatedFraction by animateFloatAsState(
+                    targetValue = fraction,
+                    label = "operationProgress",
+                )
                 LinearProgressIndicator(
-                    progress = { fraction },
+                    progress = { animatedFraction },
                     modifier = Modifier
                         .padding(top = 4.dp, end = 4.dp)
                         .fillMaxWidth(),
@@ -515,12 +523,15 @@ private fun OperationTaskRow(task: OpState.Running, onCancel: () -> Unit) {
                 overflow = TextOverflow.Ellipsis,
             )
             val speedText = if (task.speedBytesPerSec > 0) " · ${formatSize(task.speedBytesPerSec)}/s" else ""
-            Text(
-                text = "${task.percentage}%$speedText",
-                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                color = cs.primary,
-                modifier = Modifier.padding(end = 4.dp),
-            )
+            val progressLabel = if (task.total > 0) "${task.percentage}%$speedText" else if (speedText.isNotEmpty()) speedText.removePrefix(" · ") else ""
+            if (progressLabel.isNotEmpty()) {
+                Text(
+                    text = progressLabel,
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                    color = cs.primary,
+                    modifier = Modifier.padding(end = 4.dp),
+                )
+            }
             IconButton(
                 onClick = onCancel,
                 modifier = Modifier.size(28.dp),
@@ -535,8 +546,12 @@ private fun OperationTaskRow(task: OpState.Running, onCancel: () -> Unit) {
         }
         val fraction = task.fraction
         if (fraction != null) {
+            val animatedFraction by animateFloatAsState(
+                targetValue = fraction,
+                label = "taskProgress",
+            )
             LinearProgressIndicator(
-                progress = { fraction },
+                progress = { animatedFraction },
                 modifier = Modifier
                     .padding(top = 2.dp, end = 4.dp)
                     .fillMaxWidth(),

@@ -115,7 +115,7 @@ class OperationService : Service() {
             val task = tasks.first()
             val speedText = if (task.speedBytesPerSec > 0) "${formatSize(task.speedBytesPerSec)}/s" else ""
             val progressParts = listOfNotNull(
-                "${task.percentage}%",
+                if (task.total > 0) "${task.percentage}%" else null,
                 speedText.takeIf { it.isNotEmpty() },
                 task.current.takeIf { it.isNotEmpty() },
             )
@@ -154,7 +154,9 @@ class OperationService : Service() {
 
             for (task in tasks) {
                 val speed = if (task.speedBytesPerSec > 0) " · ${formatSize(task.speedBytesPerSec)}/s" else ""
-                inbox.addLine("${task.title}: ${task.percentage}%$speed")
+                val pct = if (task.total > 0) "${task.percentage}%" else ""
+                val line = if (pct.isNotEmpty() || speed.isNotEmpty()) "${task.title}: $pct$speed" else task.title
+                inbox.addLine(line)
                 if (task.total > 0) {
                     totalPct += task.percentage
                     knownPctCount++

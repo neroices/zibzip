@@ -67,7 +67,12 @@ class OperationRunner(private val scope: CoroutineScope) {
      * Starts a new concurrent operation.
      * Returns false if the maximum concurrent operations limit is reached.
      */
-    fun start(title: String, keepScreenOn: Boolean = false, block: suspend (ProgressListener) -> String): Boolean {
+    fun start(
+        title: String,
+        keepScreenOn: Boolean = false,
+        trackSpeed: Boolean = true,
+        block: suspend (ProgressListener) -> String,
+    ): Boolean {
         if (_tasks.value.size >= maxConcurrent) return false
 
         val taskId = UUID.randomUUID().toString()
@@ -77,39 +82,55 @@ class OperationRunner(private val scope: CoroutineScope) {
         _tasks.update { it + initialTask }
 
         val job = scope.launch(Dispatchers.IO + CancelTokenContext(token), start = CoroutineStart.LAZY) {
-            var lastTime = System.currentTimeMillis()
-            var lastDone = 0L
+            AppLogger.log("Task started: $title ($taskId)")
+            var lastSpeedTime = 0L
+            var lastSpeedDone = 0L
             var currentSpeed = 0L
+            var lastEmitTime = 0L
 
             var result: OpResult = OpResult.Cancelled
             try {
                 val listener = ProgressListener { done, total, current ->
                     val now = System.currentTimeMillis()
-                    val deltaTime = now - lastTime
-                    if (deltaTime >= 250) {
-                        val deltaBytes = (done - lastDone).coerceAtLeast(0)
-                        currentSpeed = (deltaBytes * 1000) / deltaTime
-                        lastTime = now
-                        lastDone = done
+                    if (trackSpeed) {
+                        if (lastSpeedTime == 0L) {
+                            lastSpeedTime = now
+                            lastSpeedDone = done
+                        } else {
+                            val deltaSpeedTime = now - lastSpeedTime
+                            if (deltaSpeedTime >= 250) {
+                                val deltaBytes = (done - lastSpeedDone).coerceAtLeast(0)
+                                currentSpeed = (deltaBytes * 1000) / deltaSpeedTime
+                                lastSpeedTime = now
+                                lastSpeedDone = done
+                            }
+                        }
                     }
 
-                    _tasks.update { list ->
-                        list.map { item ->
-                            if (item.id == taskId) {
-                                item.copy(
-                                    done = done,
-                                    total = total,
-                                    current = current,
-                                    speedBytesPerSec = currentSpeed,
-                                )
-                            } else {
-                                item
+                    val isFinished = total > 0 && done >= total
+                    if (isFinished || now - lastEmitTime >= 100) {
+                        lastEmitTime = now
+                        _tasks.update { list ->
+                            list.map { item ->
+                                if (item.id == taskId) {
+                                    item.copy(
+                                        done = done,
+                                        total = total,
+                                        current = current,
+                                        speedBytesPerSec = currentSpeed,
+                                    )
+                                } else {
+                                    item
+                                }
                             }
                         }
                     }
                 }
-                result = OpResult.Success(block(listener))
+                val message = block(listener)
+                AppLogger.log("Task completed: $title")
+                result = OpResult.Success(message)
             } catch (e: CancellationException) {
+                AppLogger.log("Task cancelled: $title")
                 result = OpResult.Cancelled
             } catch (t: Throwable) {
                 val currentJob = coroutineContext[Job]
@@ -118,8 +139,10 @@ class OperationRunner(private val scope: CoroutineScope) {
                     t is CancellationException ||
                     t.message?.contains("cancelled", ignoreCase = true) == true
                 result = if (isCancelled) {
+                    AppLogger.log("Task cancelled: $title")
                     OpResult.Cancelled
                 } else {
+                    AppLogger.log("Task failed: $title - ${t.message}", t)
                     OpResult.Failure(t.userMessage())
                 }
             } finally {

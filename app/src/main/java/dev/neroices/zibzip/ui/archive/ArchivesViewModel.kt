@@ -285,8 +285,13 @@ class ArchivesViewModel(application: Application) : AndroidViewModel(application
         else _viewer.update { it?.copy(dialog = null) }
     }
 
-    private fun startOp(title: String, keepScreenOn: Boolean = false, block: suspend (ProgressListener) -> String): Boolean {
-        val started = app.runner.start(title, keepScreenOn, block)
+    private fun startOp(
+        title: String,
+        keepScreenOn: Boolean = false,
+        trackSpeed: Boolean = true,
+        block: suspend (ProgressListener) -> String,
+    ): Boolean {
+        val started = app.runner.start(title, keepScreenOn, trackSpeed, block)
         if (!started) app.toast("Too many operations running")
         return started
     }
@@ -374,7 +379,7 @@ class ArchivesViewModel(application: Application) : AndroidViewModel(application
         val file = File(v.path)
         val paths = v.selection
         reloadAfterOp = true
-        if (!startOp("Removing from ${file.name}") { p -> "Removed ${itemsLabel(app.archives.removeEntries(file, paths, p))}" }) {
+        if (!startOp("Removing from ${file.name}", trackSpeed = false) { p -> "Removed ${itemsLabel(app.archives.removeEntries(file, paths, p))}" }) {
             reloadAfterOp = false
         }
     }
@@ -390,7 +395,7 @@ class ArchivesViewModel(application: Application) : AndroidViewModel(application
         }
         val file = File(v.path)
         reloadAfterOp = true
-        if (!startOp("Adding to ${file.name}") { p ->
+        if (!startOp("Adding to ${file.name}", trackSpeed = false) { p ->
                 "Added ${itemsLabel(app.archives.addEntries(file, v.dir, files, 5, v.password, p))}"
             }
         ) reloadAfterOp = false

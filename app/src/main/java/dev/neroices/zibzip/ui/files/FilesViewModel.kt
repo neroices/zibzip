@@ -312,8 +312,13 @@ class FilesViewModel(application: Application) : AndroidViewModel(application) {
 
     fun rename(item: FileItem, newName: String) = quick { app.fileOps.rename(File(item.path), newName); null }
 
-    private fun startOp(title: String, keepScreenOn: Boolean = false, block: suspend (ProgressListener) -> String): Boolean {
-        val started = app.runner.start(title, keepScreenOn, block)
+    private fun startOp(
+        title: String,
+        keepScreenOn: Boolean = false,
+        trackSpeed: Boolean = true,
+        block: suspend (ProgressListener) -> String,
+    ): Boolean {
+        val started = app.runner.start(title, keepScreenOn, trackSpeed, block)
         if (!started) app.toast("Too many operations running")
         return started
     }
@@ -325,7 +330,7 @@ class FilesViewModel(application: Application) : AndroidViewModel(application) {
         val files = items.map { File(it.path) }
         val useTrash = settings.value.useTrash && !files.any { app.trash.isInsideTrash(it) }
         val actionTitle = if (useTrash) "Moving to trash" else "Deleting ${itemsLabel(files.size)}"
-        if (startOp(actionTitle) { p ->
+        if (startOp(actionTitle, trackSpeed = false) { p ->
                 if (useTrash) {
                     val count = app.trash.moveToTrash(files, p)
                     "Moved ${itemsLabel(count)} to trash"
@@ -373,7 +378,7 @@ class FilesViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun deletePermanentlyFromTrash(item: TrashedItem) {
-        startOp("Deleting permanently") { p ->
+        startOp("Deleting permanently", trackSpeed = false) { p ->
             val deleted = app.trash.deletePermanently(item, p)
             refreshTrash()
             if (deleted) {
@@ -385,7 +390,7 @@ class FilesViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun emptyTrash() {
-        startOp("Emptying trash") { p ->
+        startOp("Emptying trash", trackSpeed = false) { p ->
             val count = app.trash.emptyTrash(p)
             refreshTrash()
             if (count > 0) "Emptied ${itemsLabel(count)} from trash" else "Trash is empty"

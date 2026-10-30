@@ -2,11 +2,19 @@ package dev.neroices.zibzip.data
 
 import dev.neroices.zibzip.domain.ArchiveEntryItem
 import dev.neroices.zibzip.domain.FileItem
+import dev.neroices.zibzip.domain.ProgressListener
 import java.io.File
 
 fun interface NativeProgressListener {
     fun onProgress(done: Long, total: Long, current: String)
 }
+
+internal fun ProgressListener.toNative(): NativeProgressListener? =
+    if (this !== ProgressListener.None) {
+        NativeProgressListener { done, total, current -> onProgress(done, total, current) }
+    } else {
+        null
+    }
 
 object NativeArchiveBridge {
 
