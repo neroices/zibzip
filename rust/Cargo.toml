@@ -17,7 +17,7 @@ sevenz_rust = { package = "sevenz-rust2", version = "0.24", default-features = f
 tar = "0.4"
 zstd = "0.14"
 bzip2 = "0.6"
-lzma-rust2 = { version = "0.24", default-features = false, features = ["std", "xz", "encoder"] }
+lzma-rust2 = { version = "0.25", default-features = false, features = ["std", "xz", "encoder"] }
 chrono = "0.4"
 rars = "0.12"
 
